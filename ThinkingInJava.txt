@@ -85,3 +85,9 @@
 84、与数组不同，泛型没有內建的协变类型。
 85、编译器处理List<?>和List<? extends Object>是不同的。
 86、List实际上表示“持有任何Object类型的原生List”，而List<?>表示“具有某种特定类型的非原生List”。
+87、自动包装机制不能应用于数组。
+88、一个类不能实现同一个泛型接口的两种变体。由于擦除的原因，这两个变体会成为相同的接口。
+89、可以使用“A.class.cast(B)”进行转型（通过泛型类进行转型）。
+90、可以使用java.util.Collections中的checkedCollection()、checkedList()、checkedMap()、checkedSet()、checkedSortedMap()、checkedSortedSet()构造可以动态检查的容器。在插入的时候就进行检查，而不是取出的时候才知道问题（不容易追溯源头）。这种问题常出现于，使用Java5（有泛型）之前的代码方法参数使用原生容器，而调用时传入泛型容器。例如：List<A> list = Collections.checkedList(new ArrayList<A>, A.class);
+91、混型：一个类获取多个类的能力。
+92、潜在类型机制（Java使用反射进行实现）：潜在类型机制是一种代码组织和复用机制，当用某个实例调用方法时，它只要求实现该实例实现了这些方法子集，而不用继承或实现某个接口，换句话说，程序不关心你什么类型，只要你的类型带有这些方法就行了，这样满足你可以横跨类继承结构，而调用不属于某个公共接口的方法。

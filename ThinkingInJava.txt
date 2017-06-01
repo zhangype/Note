@@ -91,3 +91,15 @@
 90、可以使用java.util.Collections中的checkedCollection()、checkedList()、checkedMap()、checkedSet()、checkedSortedMap()、checkedSortedSet()构造可以动态检查的容器。在插入的时候就进行检查，而不是取出的时候才知道问题（不容易追溯源头）。这种问题常出现于，使用Java5（有泛型）之前的代码方法参数使用原生容器，而调用时传入泛型容器。例如：List<A> list = Collections.checkedList(new ArrayList<A>, A.class);
 91、混型：一个类获取多个类的能力。
 92、潜在类型机制（Java使用反射进行实现）：潜在类型机制是一种代码组织和复用机制，当用某个实例调用方法时，它只要求实现该实例实现了这些方法子集，而不用继承或实现某个接口，换句话说，程序不关心你什么类型，只要你的类型带有这些方法就行了，这样满足你可以横跨类继承结构，而调用不属于某个公共接口的方法。
+93、Arrays常用方法，1）equals()：比较两个数组是否相等。2）deepEquals()：用于多维数组比较。3）fill()：填充数组。4）sort()：排序。binarySearch()：用于在已排序的数组中查找元素。
+94、可以使用System.arraycopy()进行数组拷贝，但不会执行自动包装和拆包，两个数组必须具有相同的确切类型。
+95、享元模式：采用共享类来避免大量拥有相同内容的“小类”的开销。享元模式区分了内蕴状态和外蕴状态，内蕴状态就是共性，外蕴就是个性。内蕴状态存储在享元内部，不会随环境的改变而有所不同，是可以共享的。外蕴状态的不可以共享的。
+96、当两个String对象所包含的内容相同的时候，JVM只创建一个String对象对应这两个不同的对象的引用。（String n = "hehe";String m = "hehe";System.out.println(n == m); 输出结果为true）。对于String而言，hashCode()是基于String内容的。
+97、LinkedHashMap(int initialCapacity, float loadFactor, boolean accessOrder)，accessOrder为true使用访问顺序排序（LRU）,accessOrder为false使用插入顺序排序。LinkedHashMap常用于LRU的缓存实现。
+98、当在HashSet中使用自己的类作为键时，必须同时重载hashCode()和equals()。
+99、通常首选ArrayList，当程序的性能因为经常从表中间进行插入和删除而变差的时候，才会选择LinkedList。
+100、HashSet的性能基本上总体比TreeSet好，特别是在添加和查询元素时。TreeSet存在的唯一原因是他可以维持元素的排序状态。用TreeSet迭代通常比用HashSet要快。
+101、使用Map时，首选HashMap，只有要求Map始终有序时，才用TreeMap。
+102、HashSet、HashMap当负载情况达到该负载因子的水平是，容器将自动增加其容量，实现方式是使容量大致加倍，并重新分布现有对象（再散列）。
+103、CopyOnWrite容器（如CopyOnWriteArrayList和CopyOnWriteArraySet），即写时复制的容器。当我们往这种容器添加元素的时候，不直接往当前容器添加，而是先将当前容器进行Copy，复制出一个新的容器，然后新的容器里添加元素，添加完元素之后，再将原容器的引用指向新的容器。CopyOnWrite容器只能保证数据的最终一致性，不能保证数据的实时一致性。所以如果你希望写入的的数据，马上能读到，请不要使用CopyOnWrite容器。
+104、java.lang.ref类库包含了一组类，这些类为垃圾回收提供了更大的灵活性。有三个继承自抽象类Reference的类：SoftReference、WeakReference和PhantomReference。如果想继续持有对某个对象的引用，希望以后还能够访问到该对象，但是也希望能够允许垃圾回收器释放它，这时就应该使用Reference对象。这样，你可以继续使用该对象，而在内存消耗殆尽的时候又允许释放该对象。使用SoftReference和WeakReference时，可以选择是否将它们放入ReferenceQueue（用作“回收前清理工作”的工具）。

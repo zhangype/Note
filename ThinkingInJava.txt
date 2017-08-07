@@ -52,7 +52,7 @@
 52、native关键字说明这个方法是原生函数，也就是这个方法是用C/C++语言实现的，并且被编译成了DLL，由java去调用。java就是在不同的平台上调用不同的native方法实现对操作系统的访问的。
 53、foreach可以运用于所有实现Iterable的接口的类。Iterable的iterator()用于产生并返回Iterator，并且Iterable接口foreach用来在序列中移动。
 54、System.getenv()获得操作系统相关信息。
-55、Arrays.asList()产生的List对象会使用底层数组作为其物理实现，操作该List对象将会改变原始数组。如果不想改变原始数组，使用另一个容器创建一个副本。List<T> list = new ArrayList(Arrays.asList())。
+55、Arrays.asList()产生的List对象会使用底层数组作为其物理实现，操作该List对象将会改变原始数组。如果不想改变原始数组，使用另一个容器创建一个副本。List<T> list = new ArrayList(Arrays.asList())。Arrays.asList()产生的List对象，仅支持那些不会改变数组大小的操作。
 56、容器不能持有基本类型，但是自动包装机制会仔细地执行基本类型到容器中所持有的包装器类型之间的双向转换。
 57、catch(Exception e){throw e}.如果把当前异常对象重新抛出，printStackTrace()方法显示的是原来异常抛出点的调用栈信息，而非重新抛出点的信息。要更新这个信息，可以调用fillInStackTrac()方法，这将返回一个Throwable对象。它是通过将当前调用栈信息填入原来那个异常对象而建立的。
 58、Throwable的子类中只有Error、Exception、RuntimeException提供了带cause参数的构造器。以形成异常链（捕获一个异常后抛出另一个异常，并保存原始异常的信息）。其它Throwable的子类应该使用initCause()方法。
@@ -103,3 +103,60 @@
 102、HashSet、HashMap当负载情况达到该负载因子的水平是，容器将自动增加其容量，实现方式是使容量大致加倍，并重新分布现有对象（再散列）。
 103、CopyOnWrite容器（如CopyOnWriteArrayList和CopyOnWriteArraySet），即写时复制的容器。当我们往这种容器添加元素的时候，不直接往当前容器添加，而是先将当前容器进行Copy，复制出一个新的容器，然后新的容器里添加元素，添加完元素之后，再将原容器的引用指向新的容器。CopyOnWrite容器只能保证数据的最终一致性，不能保证数据的实时一致性。所以如果你希望写入的的数据，马上能读到，请不要使用CopyOnWrite容器。
 104、java.lang.ref类库包含了一组类，这些类为垃圾回收提供了更大的灵活性。有三个继承自抽象类Reference的类：SoftReference、WeakReference和PhantomReference。如果想继续持有对某个对象的引用，希望以后还能够访问到该对象，但是也希望能够允许垃圾回收器释放它，这时就应该使用Reference对象。这样，你可以继续使用该对象，而在内存消耗殆尽的时候又允许释放该对象。使用SoftReference和WeakReference时，可以选择是否将它们放入ReferenceQueue（用作“回收前清理工作”的工具）。
+105、只有RandonAccessFile支持搜寻方法，并且只适用于文件。
+106、ProcessBuilder.start()和Runtime.exec方法创建一个本机进程，并返回Process子类的一个实例，该实例可用来控制进程并获得相关信息。Process类提供了执行从进程输入、执行输出到进程、等待进程完成、检查进程的退出状态以及销毁（杀掉）进程的方法。
+107、通道是一种相当基础的东西，可以向它传送用于读写的byteBuffer，并且可以锁定文件的某些区域用于独占式访问。
+108、通道（如FileChannel）特殊方法transferTo()和transferFrom()则允许我们将一个通道和另一个通道直接相连。
+109、通过nio把一个字节数组写到文件中去，那么就应该使用ByteBuffer.wrap()方法把字节数组包装起来，然后用getChannel()方法在FileOutputStream上打开一个通道，接着讲来自于ByteBuffer的数据写到FileChannel。示例代码：FileChannel fc = new FileOutputStream("test.txt").getChannel();fc.write(ByteBuffer.wrap("Some text").getBytes()));
+110、Buffer由数据和可以高效地访问及操作这些数据的四个索引组成。这四个索引是mark（标记）、position（位置）、limit（界限）、capacity（容量）。
+111、内存映射文件允许我们创建和修改那些因为太大而不能放入内存的文件。使用MappedByteBuffer处理。
+112、通过使用FileChannel调用非阻塞式的tryLock()或阻塞式的lock()，可以获得整个文件的FileLock，或者部分上锁。使用FileLock.release()可以释放锁。
+113、DeflaterOutputStream压缩类的基类，子类包括ZipOutputStream、GZIPOutputStream用于压缩成Zip和GZIP文件格式。InflaterInputStream解压缩类的基类，子类包括ZipInputStream、GZIPInputStream用于解压Zip和GZIP文件。
+114、对一个Serializable对象进行还原的过程中，没有调用任何构造器，包括默认的构造器。整个对象都是通过InputStream中取的数据恢复而来的。
+115、反序列化需要相应的Class对象（一般在类路径Classpath内），否则会得到ClassNotFoundException。
+116、如要特殊处理序列化，可以是实现Externalizable接口。必须实现writeExternal()、readExternal()方法，这两个方法会在序列化和反序列化还原的过程中被自动调用。并且自动调用默认构造器，且默认构造器必须为public。
+117、transient（瞬时）关键字与Serializable搭配使用，控制特定字对象不被Java的序列化机制自动保存与恢复。
+118、Externalizable的替代方法：实现Serializable接口，添加private void writeObject(ObjectOutputStream stream) throws IOException;private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException;ObjectOutputStream、ObjectInputStream对象调用writeObject()、readObject()实际上调用的是你对象的writeObject()、readObject()。在调用ObjectOutputStream.writeObject()时，会检查所传递的Serializable对象，看看是否自己实现了自己的writeObject()。如果实现了，就跳过正常的序列化过程并调用它的writeObject()。Java使用反射机制检查Serializable对象是否有writeObject()或readObject()writeObject()。
+119、如果想序列化static值，必须自己手动实现。
+120、Preferences API与对象序列号相比，前者与对象持久性更密切，因为它可以自动存储和读取信息。只能用于小的、受限的数据集合。
+121、可以使用“==”来比较enum实例，编译器会自动提供equals()和hashCode()方法。Enum类实现了Comparable接口，所以它具有compareTo()方法。同时，还实现了Serializable接口。如果在enum实例上调用getDeclaringClass()方法，我们就能知道其所属的enum类。name()方法返回enum实例声明时的名字，这与使用toString()方法效果相同。valueOf()是在Enum中定义的static方法，它根据名字返回相应的enum实例，如果不存在给定名字的实例，将会抛出异常。
+122、values()方法不存在于Enum类，而是由编译器添加给枚举类的static方法，同时编译器还为其添加了一个参数的valueOf()方法（Enum类中的valueOf()为两个参数）。并且编译器将枚举类标记成final类，使得枚举类无法继承。
+123、定义枚举类时，首先定义枚举实例序列，然后定义属性、构造器、属性的get/set方法。
+124、@Target元注解：用来定义你的注解用于将应用于什么地方（例如是一个方法或者一个域）。@Retention元注解：用来定义该注解在哪一个级别可用，在源代码中（SOURCE）、类文件中（CLASS）或者运行时（RUNTIME）。@Documented元注解：将此注解包含在Javadoc中。@Inherited元注解：允许子类继承父类中的注解。
+125、对于非基本类型的元素，无论是在源代码中声明时，或是在注解接口中定义默认值时，都不能以null作为值。
+126、Servlet具有天生的多线程性，因为Web服务器经常包含多个处理器，而并发是充分利用这些处理器的理想方式。
+127、如果没有任务阻塞，那么在单处理器机器上使用并发就没有任何意义。
+128、静态方法Thread.yield()的调用是对线程调度器的一种建议，它在声明“我已经执行完生命周期中最重要的部分了，此刻正是切换给其他任务执行一段时间的大好时机。”
+129、Java SE5的java.util.concurrent包中的执行器（Executor）将为你管理Thread对象，从而简化并发编程。Executor在客户端和任务执行之间提供一个间接层；与客户端直接执行任务不同，这个中介对象将执行任务。Executor允许你管理一部任务的执行，而无须显式地管理线程的生命周期。Executor在Java SE5/6是启动任务的优选方法。
+130、ExecutorService（具有服务生命周期的Executor，例如关闭）知道如何构建恰当的上下文来执行Runnable对象。ExecutorService对象是使用静态的Executor方法创建的，这个方法可以确定其Executor类型。（ExecutorService exec = Executors.newCachedThreadPool();）
+131、newCachedThreadPool()创建一个可根据需要创建新线程的线程池。newFixedThreadPool(int nThreads) 创建一个可重用固定线程数的线程池，以共享的无界队列方式来运行这些线程。newSingleThreadExecutor()。创建一个使用单个 worker 线程的 Executor，以无界队列方式来运行该线程。在任何线程池中，现有线程在可用的情况下，都会被自动复用。
+132、如果希望在完成任务时，返回一个值，那么实现Callable接口而不是Runnable接口。Callable是一个具有类型参数的泛型，它的类型参数表示的是从方法call()中返回的值。并且必须使用ExecutorService.submit()方法调用它。submit()方法会产生Future对象，可以使用get()获取该结果。
+133、如果某个线程在另一个线程t上调用t.join()，此线程将被挂起，直到目标线程t结束 才恢复（即t.isAlive()返回为假）。
+134、Thread.UncaughtExceptionHandler允许在每个Thread对象上都附着一个异常处理器。Thread.UncaughtExceptionHandler.uncaughtException()会在线程因未捕获的异常而临近死亡时被调用。
+135、当在对象上调用其任意synchronized方法的时候，此对象都被加锁，这时该对象的其他synchronized方法只有等到前一个方法调用完毕并释放锁之后才能被调用。对于前面的方法，如果某个任务对对象调用了f()，对于同一个对象而言，就只能等到f()调用结束并释放锁之后，其他任务才能调用f()和g()。所以，对于某个特定对象来说，其所有synchronized方法共享同一个锁，这可以被用来防止多个任务同时访问被编码为对象内存。
+136、在使用并发时，将域设置为private是非常重要的，否则，synchronized关键字就不能防止其他任务直接访问域，这样就会产生冲突。
+137、synchronized static方法可以在类的范围内防止对static数据的并发访问。
+138、每个访问临界共享资源的方法都必须被同步，否则它们不会正确地工作。
+139、使用显式的Lock对象，必须显式地创建、锁定和释放。与内建的锁形式相比，代码缺乏优雅性。但是，对于解决某些类型的问题来说，它更加灵活。在使用synchronized关键字时，某些事物失败了，那么就会抛出一个异常。但是你没有机会去做任何清理工作，以便维护系统使其处于良好状态。显式的Lock对象，就可以使用finally子句将系统维护在正确的状态了，并提供了更加细粒度的控制力。
+140、JVM可以将64位（long和double变量）的读取和写入当作两个分离的32位操作来执行，这就产生了在一个读取和写入操作中间发生上下文切换，从而导致不同的任务看到不正确结果的可能性（有时被称为字撕裂）。当定义long或double变量时，如果使用volatile关键字，就会获得原子性（Java SE5之前，volatile一直未能正确地工作）。不同的JVM可以任意地提供更强的保证，但是你不应该依赖于平台相关的特性。
+141、volatile关键字确保了应用中的可视性。如果你将一个域声明为volatile的，那么只要对这个域产生了写操作，那么所有的读操作就可以看到这个修改。 即便使用了本地缓存，情况也确实如此，volatile域会立即被写入到主存中，而读取操作就发生在主存中。
+142、如果一个域完全由synchronized方法或语句块来防护，那就不必将其设置为是volatile的。
+143、使用volatile而不是synchronized的唯一安全的情况是类中只有一个可变的域。
+144、第一选择应该是使用synchronized关键字，这是最安全的方式。
+145、Java递增操作不是原子性的。
+146、在特殊情况进行性能调优，可以使用原子类AtomicInteger、AtomicLong、AtomicReference等特殊的原子性变量类，它们提供机器级别上的原子性。可以 消除synchronized关键字。
+147、synchronized关键字不属于方法签名的组成部分。
+148、临界区：防止多个线程同事访问方法的部分代码而被分离出来的代码。synchronized(syncObject){}。synchronized被用来制定某个对象，此对象的锁被 用来对花括号内的代码进行同步控制。这也被称为同步控制块；在进入此段代码前，必须得到syncObject对象的锁。如果其他线程已经得到这个锁，那么就得 等到锁被释放后，才能进入临界区。
+149、java.lang.ThreadLocal类来实现创建和管理线程本地存储。ThreadLocal对象通常当作静态变量域存储。在创建ThreadLocal时，你只能通过get()和set ()方法来访问该对象的内容，其中，get()方法将返回其线程相关联的对象的副本，而set()会将参数插入到到为其线程存储的对象中，并返回存储中的原有对 象。
+150、ExcutorService.awaitTermination()等待每个任务结束，如果所有的任务都在超时时间到达之前全部结束，则返回true，否则返回false。
+151、线程的四种状态：1）新建（new）：当线程被创建时，它只会短暂地处于这种状态，此时它已经分配了必需的系统资源，并执行了初始化。此刻线程已经 有资格获得CPU时间了，之后调度器会把这个线程转变为可运行状态或者阻塞状态。2）就绪（Runnable）：这种状态下，只要调度器能分配时间片给线程，它 就可以运行。3）阻塞（Blocked）：线程能够运行，但有某个条件阻止它的运行。处于此状态时，不会分配给线程任何CPU时间。直到线程重新进入就绪状态 。4）死亡（Dead）：处于死亡或者终止状态的线程将不再是可调度的。
+152、Thread类包含interrupt()方法，因此你可以终止被阻塞的任务，这个方法将设置线程的中断状态。如果一个线程已经被阻塞，或者试图执行一个阻塞操 作，那么设置这个线程的中断状态将抛出InterruptedException。当抛出该异常或者该任务调用Thread.interrupted()时，中断状态将被复位。
+153、如果你在Executor上调用shutdownNow()，那么它将发送一个interrupt()调用给它启动的所有线程。
+154、如果使用Executor，通过调用submit()来启动任务，可以持有该任务的上下文。submit()将返回一个泛型Feture<?>，其中有一个修饰的参数。通过 Future.cancel()，可以中断某个特定任务。如果将true传递给cancel()，那么它就会拥有在该线程是那个调用interrupt()以停止这个线程的权限。
+155、I/O和synchronized块上的等待是不可中断的。
+156、被阻塞的nio通道会自动地响应中断。
+157、在ReentrantLock上阻塞的任务具备可以被中断的能力。
+158、中断发生的唯一时刻是在任务要进入到阻塞操作中，或者已经在阻塞操作内部时。
+159、被设计用来响应interrupt()的类必须建立一种策略，来确保它将保持一致的状态。通常意味着所有需要清理的对象创建操作的后面，都必须紧跟try-finally子句，从而使得无论run()循环如何退出，清理都会发生。
+160、调用sleep()、yield()时，锁并没有释放。当调用wait()时，线程的执行被挂起，对象上的锁被释放。
+161、只能在同步控制方法或同步控制块里调用wait()、notify()、notifyAll()。如果在非同步控制方法里调用这些方法，程序能通过编译，但运行的时候，将得到IllegalMonitorStateException异常。

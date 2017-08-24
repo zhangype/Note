@@ -44,4 +44,4 @@
 
 18、查看远程仓库：git remote。查看已经配置的远程仓库服务器。指定选项-v，会显示需要读写远程仓库使用的Git保存的简写与其对应的URL。
 
-19、添加远程仓库：git remote add <shortname> <url>。在命令行中，可以使用shortname替代整个url。
+19、添加远程仓库：git remote add <shortname> <url>。在命令行中，可以使用shortname替代整个url。如果你想拉取的仓库中有但你没有的信息，可以运行git fetch pb。

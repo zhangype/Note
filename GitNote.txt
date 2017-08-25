@@ -44,4 +44,26 @@
 
 18、查看远程仓库：git remote。查看已经配置的远程仓库服务器。指定选项-v，会显示需要读写远程仓库使用的Git保存的简写与其对应的URL。
 
-19、添加远程仓库：git remote add <shortname> <url>。在命令行中，可以使用shortname替代整个url。如果你想拉取的仓库中有但你没有的信息，可以运行git fetch pb。
+19、添加远程仓库：git remote add <shortname> <url>。在命令行中，可以使用shortname替代整个url。如果你想拉取的仓库中有但你没有的信息，可以运行git fetch shortname。
+
+20、从远程仓库中抓取与拉取：git fetch [remote-name]。这个命令会访问远程仓库，从中拉取所有你还没有的数据。 执行完成后，你将会拥有那个远程仓库中所有分支的引用，可以随时合并或查看。并不会自动合并或修改你当前的工作。
+
+21、推送到远程仓库：git push [remote-name] [branch-name]。
+
+22、查看远程仓库：git remote show [remote-name]。
+
+23、远程仓库的移除与重命名：删除，git remote rm remote-name；重命名，git remote rename old_name new_name。
+
+24、列出标签：git tag。Git使用两种主要类型的标签：轻量标签（lightweight）与附注标签（annotated）。
+●轻量标签，像一个不会改变的分支，它只是一个特定提交的引用。
+●附注标签，是存储在Git数据库中的一个完整对象。是可以被校验的；其中包含打标签者的名字、电子邮件地址、日期时间。
+
+25、创建附注标签：git tag -a，例如：git tag -a v1.4 -m 'my version 1.4'。-m选项指定了一条将会存储在标签中的信息。如果没有为附注标签指定一条信息，Git会运行编辑器要求你输入信息。
+
+26、创建轻量标签：不需要使用 -a、-s 或 -m 选项。例如，git tag v1.4-lw。
+
+27、共享标签：默认情况下，git push命令并不会传送标签到远程仓库服务器上。在创建完标签后你必须显式地推送标签到共享服务器上。这个过程就像共享远程分支一样，可以运行 git push origin [tagname]。也可以使用带有 --tags 选项的git push 命令，将会把所有不在远程仓库服务器上的标签全部传送到过去。
+
+28、检出标签：在 Git 中你并不能真的检出一个标签，因为它们并不能像分支一样来回移动。 如果想要工作目录与仓库中特定的标签版本完全一样，可以使用 git checkout -b [branchname] [tagname] 在特定的标签上创建一个新分支。
+
+29、定义别名：git config --global alias.co checkout。当要输入git checkout时，只需要输入git co。

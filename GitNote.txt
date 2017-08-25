@@ -67,3 +67,13 @@
 28、检出标签：在 Git 中你并不能真的检出一个标签，因为它们并不能像分支一样来回移动。 如果想要工作目录与仓库中特定的标签版本完全一样，可以使用 git checkout -b [branchname] [tagname] 在特定的标签上创建一个新分支。
 
 29、定义别名：git config --global alias.co checkout。当要输入git checkout时，只需要输入git co。
+
+30、查看各个分支当前所指的对象：git log --oneline --decorate。
+
+31、切换分支：git checkout branchname。
+
+32、查看分叉历史：git log --oneline --decorate --graph --all。
+
+33、删除分支：用带-d选项的git branch命令来删除分支。git branch -d branchname。
+
+34、分支的合并：git merge mergedbranchname（被合并分支名称）

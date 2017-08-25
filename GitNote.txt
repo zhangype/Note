@@ -76,4 +76,6 @@
 
 33、删除分支：用带-d选项的git branch命令来删除分支。git branch -d branchname。
 
-34、分支的合并：git merge mergedbranchname（被合并分支名称）
+34、分支的合并：git merge mergedbranchname（被合并分支名称）。
+
+35、使用图形化工具解决冲突：git mergetool。

@@ -97,3 +97,5 @@
 43、变基：
 ●使用rebase命令将提交到某一分支上的所有修改都移至另一分支上，就好像“重新播放”一样。例如：git checkout branch1，git rebase branch2。将branch1的修改都应用到branch2分支上。
 ●使用git rebase [basebranch] [topicbranch]命令可以直接将特性分支（即topicbranch）变基到目标分支（即basebranch）上。
+
+44、使用本地协议（Local protocol），增加一个本地版本库到现有的Git项目。git remote add local_proj /opt/git/project.git。

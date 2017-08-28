@@ -160,3 +160,14 @@
 159、被设计用来响应interrupt()的类必须建立一种策略，来确保它将保持一致的状态。通常意味着所有需要清理的对象创建操作的后面，都必须紧跟try-finally子句，从而使得无论run()循环如何退出，清理都会发生。
 160、调用sleep()、yield()时，锁并没有释放。当调用wait()时，线程的执行被挂起，对象上的锁被释放。
 161、只能在同步控制方法或同步控制块里调用wait()、notify()、notifyAll()。如果在非同步控制方法里调用这些方法，程序能通过编译，但运行的时候，将得到IllegalMonitorStateException异常。
+162、当notifyAll()因某个特定的锁而被调用时，只有等待这个锁的任务才会被唤醒。而非“所有正在等待的任务”。
+163、可以通过Lock lock = new ReentrantLock();Condition condition = lock.newCondition();Condition的await()、signal()或signalAll()管理任务间的通信。
+164、每个Lock.lock()的调用都必须紧跟一个try-finally子句，用来保证在所有情况下都可以释放锁。
+165、同步队列java.util.concurrent.BlockingQueue接口在任何时候都只允许一个任务插入或移除元素，并且有大量的标准实现：LinkedBlockingQueue、ArrayBlockingQueue。如果消费者任务试图从队列中获取对象，而该队列此时为空，那么队列可以挂起消费者服务，当有更多的元素可用时恢复消费者队列。
+166、多数情况下，同步队列可以代替wait()和notifyAll()方法解决任务互操作问题。
+167、死锁条件（同时满足以下全部条件）：
+●互斥条件。任务使用的资源中至少有一个是不能共享的。
+●至少有个一个任务，它必须持有一个资源且正在等待获取一个当前被别的任务持有的资源。
+●资源不能被任务抢占。
+●必须有循环等待。
+168、CountDownLatch：一个同步辅助类，在完成一组正在其他线程中执行的操作之前，它允许一个或多个线程一直等待。用给定的计数 初始化CountDownLatch。由于调用了countDown()方法，所以在当前计数到达零之前，await()方法会一直受阻塞。之后，会释放所有等待的线程，await的所有后续调用都将立即返回。这种现象只出现一次——计数无法被重置。如果需要重置计数，请考虑使用CyclicBarrier。

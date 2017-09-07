@@ -1,0 +1,20 @@
+1、@FunctionalInterface，表明该接口可以作为函数使用。
+2、lambda表达式仅能放入如下代码：
+●预定义使用了@Functional注释的函数式接口
+●自带一个抽象函数的方法
+●SAM（Single Abstract Method单个抽象方法）类型。
+这些称为lambda表达式的目标类型，可以用作返回类型，或lambda目标代码的参数。例如，若一个方法接收Runnable、Comparable或者Callable接口，都有单个抽象方法，可以传入lambda表达式。类似的，如果一个方法接受声明于java.util.function 包内的接口，例如Predicate、Function、Consumer或Supplier，那么可以向其传lambda表达式。
+3、lambda表达式内可以使用方法引用，仅当该方法不修改lambda表达式提供的参数。例如：list.forEach(System.out::println);。若对参数有任何修改，则不能使用方法引用，而需键入完整地lambda表达式。
+4、lambda内部可以使用静态、非静态和局部变量，这称为lambda内的变量捕获。
+5、Lambda方法在编译器内部被翻译成私有方法，并派发 invokedynamic 字节码指令来进行调用。
+6、lambda表达式有个限制，只能引用final或final局部变量，不能在lambda内部修改定义在域外的变量，但是可以访问。
+7、方法引用可以看作Lambda表达式的更简洁的一种表达形式，使用::操作符，方法引用主要有三类：
+●指向静态方法的方法引用(例如Integer的parseInt方法，写作Integer::parseInt)；
+●指向任意类型实例方法的方法引用(例如String的length方法，写作String::length)；
+●指向现有对象的实例方法的方法引用(例如假设你有一个本地变量localVariable用于存放Variable类型的对象，它支持实例方法getValue，那么可以写成localVariable::getValue)。
+8、重复注解：相同的注解可以在同一地方声明多次。重复注解机制本身必须用@Repeatable注解。事实上，这并不是语言层面上的改变，更多的是编译器的技巧，底层的原理保持不变。
+9、参数名字：通过反射API与Parameter.getName()方法与字节码文件（通过新版的javac的–parameters选项）可以获得参数名字。
+10、Optional：提供很多有用的方法，这样我们就不用显式进行空值检测。
+11、Clock类，它通过指定一个时区，然后就可以获取到当前的时刻，日期与时间。Clock可以替换System.currentTimeMillis()与TimeZone.getDefault()。
+12、使用forEach()处理集合时不能使用break和continue，也就是说不能按照普通的for循环遍历集合时那样根据条件来中止遍历，而如果要实现在普通for循环中的效果时，可以使用return来达到，也就是说如果你在一个方法的lambda表达式中使用return时，这个方法是不会返回的，而只是执行下一次遍历。
+13、类依赖分析器jdeps：jdeps是一个很有用的命令行工具。它可以显示Java类的包级别或类级别的依赖。它接受一个.class文件，一个目录，或者一个jar文件作为输入。jdeps默认把结果输出到系统输出（控制台）上。

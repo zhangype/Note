@@ -12,6 +12,6 @@
 __服务接口（Service Interface）：__ 提供者实现。  
 **提供者注册API（Provider Registration API）：** 这是系统用来注册实现，让客户端访问它们的。  
 **服务访问API（Service Access API）：** 客户端用来获取服务实例。  
-**服务提供者接口（Service Provider Interface）[可选]：**这些提供者负责创建其服务实现的实例。如果没有提供者接口，实现就按照类名称注册，并通过反射方式进行实例化。
+**服务提供者接口（Service Provider Interface）[可选]：** 这些提供者负责创建其服务实现的实例。如果没有提供者接口，实现就按照类名称注册，并通过反射方式进行实例化。
 &emsp;&emsp; 对于JDBC来说，Connection就是它的服务接口，DriverManager.registerDriver是提供者注册API，DriverManager.getConnection是服务访问API，Driver就是服务提供者接口。
 ### 静态工厂方法的第四大优势在于，在创建参数化类型实例的时候，它们使代码变得更加简洁。

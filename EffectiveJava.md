@@ -3,4 +3,4 @@
 ### 重要组件：
 __服务接口（Service Interface）：__ 提供者实现。  
 **提供者注册API（Provider Registration API）：** 这是系统用来注册实现，让客户端访问它们的。  
-**服务访问API（Service Access API）：** 客户端用来获取服务实例。  
+**服务访问API（Service Access API）：** 客户端用来获取服务实例。

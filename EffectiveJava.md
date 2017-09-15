@@ -36,3 +36,48 @@
 &emsp;&emsp;一般而言，只要类是自己管理内存，就应该警惕内存泄漏问题。一旦元素被释放掉，则给元素中包含的任何对象引用都应该被清空。
 
 ## 避免使用终结方法
+&emsp;&emsp;finalize()（终结方法）无法保证何时被调用以及是否被调用。
+&emsp;&emsp;**终结方法的用处：**
+&emsp;&emsp;1、当对象的所有者忘记调用显式终止方法时，终结方法可以充当“安全网（safety net）”。
+&emsp;&emsp;2、本地对等体是一个本地对象（native object），普通对象通过本地方法（native method）委托给一个本地对象。因为本地对等体不是一个普通对象，所以垃圾回收器不会知道它，当它的Java对等体被回收的时候，它不会被回收。在本地对等体并不拥有关键资源的前提下，终结方法正是执行这项任务最合适的工具。如果本地对等体用友必须被及时终止的资源，那么该类就应该有一个显式的终结方法。
+>&emsp;&emsp;**"终结方法链（finalizer chaining）"并不会被自动执行**
+>&emsp;&emsp;如果子类实现者覆盖了超类的终结方法，但是忘记了手工调用超类的终结方法，那么超类的终结方法将永远也不会被调用到。为了防范，需要把终结方法放在一个匿名的类中，该匿名类的唯一用途就是终结它的外围实例。该匿名类的单个实例被称为终结方法守卫者，外围类的每个实例都会创建这样一个守卫者。外围实例在它的私有实例域中保存着一个对其终结方法守卫者的唯一引用，因此终结方法守卫者与外围实例可以同时启动终结过程。
+``` java
+public class Foo {
+
+    @Override
+    protected void finalize() throws Throwable {
+        System.out.println("Foo finalize");
+        super.finalize();
+    }
+
+    private final Object finalizerGuardian = new Object() {
+        @Override
+        protected void finalize() throws Throwable {
+            System.out.println("finalizerGuardian finalize");
+            super.finalize();
+        }
+    };
+}
+```
+
+``` java
+public class FooSon extends Foo {
+    @Override
+    protected void finalize() throws Throwable {
+        System.out.println("FooSon finalize");
+//        super.finalize();
+    }
+}
+```
+
+``` java
+public static void main(String[] args) {
+    FooSon son = new FooSon();
+    son = null;
+    System.gc();
+}
+```
+&emsp;&emsp;输出效果
+>finalizerGuardian finalize
+FooSon finalize

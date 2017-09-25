@@ -81,3 +81,62 @@ public static void main(String[] args) {
 &emsp;&emsp;输出效果
 >finalizerGuardian finalize  
 FooSon finalize
+
+## 覆盖equals时请遵守通用约定
+> 自反性  
+对称性  
+传递性  
+一致性  
+非空性
+
+## 覆盖equals时总要覆盖hashCode
+> ●在应用程序的执行期间，只要对象的equals方法的比较操作所用到的信息没有被修改，那么对这个对象调用多次，hashCode方法都必须始终如一地返回同一个整数。在同一个应用程序的多次执行过程中，每次执行所返回的整数可以不一致。
+> ●如果两个对象根据equals(Object)方法比较是相等的，那么调用这两个对象任意一个对象的hashCode方法都必须产生相同的整数结果。
+> ●如果两个对象根据equals(Object)方法比较是不相等的，那么调用这两个对象任意一个对象的hashCode方法，则不一定要产生不同的整数效果。但是给不相等的对象产生截然不同的整数结果，有可能提高散列表（hash table）的性能。
+
+## 始终要覆盖toString
+
+## 谨慎地覆盖clone
+> Cloneable接口中没有任何方法，它决定了Object中受保护的clone方法实现的行为：如果一个类实现了Cloneable，Object的clone方法就返回该对象的逐域拷贝，否则就会抛出CloneNotSupportedException异常。这是接口的一种极端非典型的用法，也不值得效仿。对于Cloneable接口，它改变了超类中受保护的方法的行为。
+
+&emsp;&emsp;`永远不要让客户去做任何类库能够替客户完成的事情。`
+&emsp;&emsp;如果专门为了继承而设计的类覆盖了clone方法，覆盖版本的clone方法就应该模拟Object.clone的行为：它应该被声明为proteced，抛出CloneNotSupportedException异常，并且该类不应该实现Cloneable接口。这样做可以使子类具有实现或不实现Cloneable接口的自由，就仿佛它们直接拓展了Object一样。
+&emsp;&emsp;如果决定使用线程安全的类实现Cloneable接口，要记得它的clone方法必须得到很好的同步。
+&emsp;&emsp;**另一个实现对象拷贝的好办法是提供一个拷贝的构造器或拷贝工厂**
+``` java
+public Yum(Yum yum);
+```
+``` java
+public static Yum newInstance(Yum yum);
+```
+## 考虑实现Comparable接口
+&emsp;&emsp;如果想为一个实现了Comparable接口的类增加值组件，请不要拓展这个类；而是要编写一个不相关的类，其中包含第一个类的实例。然后提供一个“视图（view）”方法返回这个实例。这样既可以自由地在第二个类上实现compareTo方法，同时也允许它的客户端在必要的时候，把第二个类的实例视同第一个类的实例。
+
+## 使类和成员的可访问性最小化
+
+&emsp;&emsp;**尽可能地使每个类或者成员不被外界访问。**
+&emsp;&emsp;如果这个类实现了Serializable接口，私有成员和包级私有成员可能被“泄漏（leak）”到导出的API中。
+&emsp;&emsp;**实例域绝不能是公有的。包含公有可变域的类并不是线程安全的。**
+&emsp;&emsp;即使域是fianl的，并且引用不可变的对象，当把这个域变成公有的时候，也就放弃了“切换到一种新的内部数据表示法”的灵活性。
+&emsp;&emsp;**类具有公有的静态final数组域，或者返回这种域的访问方法，这几乎总是错误的。**
+&emsp;&emsp;客户端将能够修改数组中的内容。这是安全漏洞的一个常见根源。
+``` java
+// Pontential security hole!
+public static final Thing[] VALUES = { ... };
+```
+&emsp;&emsp;修正这个问题有两种方法。可以使公有数组变成私有的，并增加一个公有的不可变列表：
+``` java
+private static final Thing[] PRIVATE_VALUES = { ... };
+public static final List<Thing> VAlUES = Collections.unmodifiableList(Arrays.asList(PRIVATE_VALUES));
+```
+&emsp;&emsp;另一个方法是，可以使数组变成私有的，并添加一个公有方法，它返回私有数组的一个备份：
+``` java
+private static final Thing[] PRIVATE_VALUES = { ... };
+public static final Thing[] values(){
+    return PRIVATE_VALUES.clone();
+}
+```
+
+## 在公有类中使用访问方法而非公有域
+
+## 是可变性最小化

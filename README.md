@@ -7,3 +7,5 @@
 ## Java编程思想笔记
 
 ## Java8笔记
+
+## EffectiveJava笔记

@@ -156,3 +156,114 @@ public static final Thing[] values(){
 &emsp;&emsp;没有方法会修改对象，并且它的所有域都必须是final的。实际上，可以为了提高性能有所放松：没有一个方法能够对对象的状态产生外部可见（externally visible）的改变。
 &emsp;&emsp;如果选择不可变类实现Serializable接口，并且它包含一个或者多个指向可变对象的域，就必须提供一个显示的readObject或者readResolve方法，或者使用ObjectOutputStream.writeUnshared方法和ObjectOutputStream.readUnshared方法，即使默认的序列化形式是可以接受的，也是如此。否则攻击者可能从不可变的类创建可变的实例。
 &emsp;&emsp;`除非有很好的理由要让类成为可变的类，否则就应该是不可变的。`不可变的类有许多优点，唯一的缺点是在特定的情况下存在潜在的性能问题。
+
+## 复合优先于继承
+&emsp;&emsp;在包的内部使用继承是非常安全的。然而，对普通的具体类（concrete class）进行跨越包边界的继承，则是非常危险的。
+&emsp;&emsp;`与方法调用不同的是，继承打破了封装性。`子类依赖于其超类中特定功能的实现细节。
+&emsp;&emsp;包装类不适合用在回调框架（callback framework）中：在回调框架中，对象把自身的引用传递给其他的对象，用于后续的调用（“回调”）。因为被包装起来的对象并不知道它外面的包装对象，所以它传递一个指向自身的引用（this），回调时避开了外面的包装对象。
+
+## 要么为继承而设计，并提供文档说明，要么就禁止继承
+&emsp;&emsp;对于专门为了继承而设计并且具有良好文档说明的类而言，**该类的文档必须精确地描述覆盖每个方法所带来的影响。**该类必须有文档说明它可覆盖（overridable）的方法的自用性（self-use）。对于每个公有的或者受保护的方法或者构造器，它的文档必须指明该方法或者构造器调用了哪些可覆盖的方法，以什么顺序调用的，每个调用的结果又是如何影响后续的处理过程的。更一般地，类必须在文档中说明，在哪些情况下它会调用可覆盖的方法。
+&emsp;&emsp;**为了允许继承，构造器绝不能调用可被覆盖的方法。**
+&emsp;&emsp;如果决定在一个为了继承而设计的类中实现Cloneable或者Serializable接口，应该意识到clone和readObject方法在行为上非常类似构造器。所以**无论是clone还是readObject，都不可以调用可覆盖的方法，不管是直接还是间接的方式。**
+&emsp;&emsp;如果决定在一个为了继承而设计的类中实现Serializable接口，并且该类有一个readResolve或者writeReplace方法，就必须使readResolve或者writeReplace成为受保护的方法，而不是私有方法。如果这些方法是私有的，那么子类将会不声不响地忽略掉这连个方法。
+
+## 接口优于抽象类
+&emsp;&emsp;**现有的类可以容易被更新，以实现新的接口。**
+&emsp;&emsp;**接口是定义mixin（混合类型）的理想选择。**
+&emsp;&emsp;**接口允许我们构造非层次结构的类型框架。**
+&emsp;&emsp;编写骨架实现类，必须认真研究接口，并确定哪些方法是最基本的（primitive），其他的方法则可以根据它们来实现，这些基本方法将成为骨架实现类中的抽象方法。然后必须为接口中所有其他的方法提供具体的实现。
+
+## 接口只用于定义类型
+&emsp;&emsp;如果大量利用工具类导出的常量，可以通过**静态导入（static import）机制**，避免使用了类名来修饰常量名。
+
+## 类层次优于标签类
+
+## 用函数对象表示策略
+
+## 优先考虑静态成员类
+&emsp;&emsp;当非静态成员类的实例被创建的时候，它和外围实例之间的关联关系也随之被建立起来；而且，这种关联关系以后不能被修改。
+&emsp;&emsp;Map接口的实现往往使用非静态成员类来实现它们的集合视图，这些集合视图是有Map和keySet、entrySet和Values方法返回的。同样地，诸如Set和List这种集合接口的实现往往也使用非静态成员类来实现它们的跌代器。
+&emsp;&emsp;`如果声明成员类不要求访问外围实例，就要始终把static修饰符放在它的声明中`，使它成为静态成员类，而不是非静态成员类。如果省略了static修饰符，则每个实例都将包含一个额外的指向外围对象的引用。保存这份引用需要消耗时间和空间，并且会导致外围实例在符合垃圾回收是却仍然得以保留。如果在没有外围实例的情况下，也需要分配实例，就不能使用非静态成员类，因为非静态成员类的实例必须要有一个外围实例（例如许多Map实现的内部都有一个Entry对象，Entry对象上的方法getKey、getValue和setValue并不需要访问该Map）。
+
+## 请不要在新代码中使用原生态类型
+&emsp;&emsp;泛型有子类型化（subtyping）的规则，List&lt;String&gt;是原生态类型List的一个子类型，而不是参数化类型List&lt;Object&gt;的子类型。
+
+## 消除非受检警告
+&emsp;&emsp;应该始终在尽可能小的范围中使用SuppressWarnings注解。
+&emsp;&emsp;每当使用@SuppressWarnings("unchecked")注解时，都要加一条注释，说明为什么这么做。
+&emsp;&emsp;在结合使用可变参数（varargs）方法和泛型时会出现令人费解的警告。这是由于每当调用可变参数方法时，就会创建一个数组来存放varargs参数。如果这个数组的元素类型不是可具体化的，就会得到一条警告。所以应避免混合使用泛型与可变参数方法。
+
+## 优先考虑泛型
+
+## 优先考虑泛型方法
+
+## 利用有限制通配符来提升API的灵活性
+&emsp;&emsp;为了获得最大限度的灵活性，要在表示生产者或者消费者的输入参数上使用通配符类型。如果某个输入参数既是生产者，又是消费者，那么则需要严格的类型匹配。
+&emsp;&emsp;**如果参数化类型表示一个T生产者，就使用<? extends T>；如果它表示一个T消费者，就使用<? super T>。**例如pushAll和pushAll方法。
+``` java
+package com.zhangype;
+
+import java.util.Collection;
+
+public class MyStack<E> {
+    public MyStack();
+
+    public void put(E e);
+
+    public E pop();
+
+    public boolean isEmpty();
+
+    // Wildcard type for parameter that serves as an E producer
+    public void pushAll(Iterable<? extends E> src) {
+        for (E e : src) {
+            put(e);
+        }
+    }
+
+    // Wildcard type for parameter that serves as an E consumer
+    public void putAll(Collection<? super E> dst) {
+        while (!isEmpty()) {
+            dst.add(pop());
+        }
+    }
+}
+```
+&emsp;&emsp;``不要用通配符类型作为返回类型。除了为用户提供额外的灵活性之外，它还会强制用户在客户端代码中使用通配符类型。``
+&emsp;&emsp;类型推导规则相当复杂，而且它们并非总能完成需要它们完成的工作。
+``` java
+public static <E> Set<E> union(Set<? extends E> s1, Set<? extends E> s2)
+```
+&emsp;&emsp;如果这样编写，会编译错误：
+``` java
+Set<Integer> integers = ...;
+Set<Double> doubles = ...;
+Set<Number> numbers = union(integers, doubles);
+```
+&emsp;&emsp;如果编译器不能推断你希望它拥有的类型，可以通过一个显式的参数类型告诉编译器。如：
+``` java
+Set<Number> numbers = Union.<Number>union(integers, doubles);
+```
+&emsp;&emsp;类型参数和通配符之间具有双重性，许多方法都可以利用其中一个或者另一个进行申明。
+``` java
+public static <E> void swap(List<E> list, int i, int j);
+public static <E> void swap(List<?> list, int i, int j);
+```
+&emsp;&emsp;在公共API中，第二种更好一些，因为它更简单。**一般来说，如果类型参数只在方法声明中出现一次，就可以用通配符取代它。**
+``` java
+public static <E> void swap(List<E> list, int i, int j){
+        list.set(i, list.set(j, list.get(i)));
+};
+```
+&emsp;&emsp;当出现这种无法通过变编译的简单实现，可以编写私有的辅助方法来捕捉通配符类型，为了捕捉类型，辅助方法必须是泛型方法，就像下面这样：
+``` java
+public static <E> void swap(List<E> list, int i, int j){
+        swapHelper(list, i, j);
+};
+// Private helper method for wildcard capture
+public static <E> void swapHelper(List<E> list, int i, int j){
+        list.set(i, list.set(j, list.get(i)));
+};
+```
+&emsp;&emsp;swapHelper允许我们导出比较好的基于通配符的声明，同时在内部利用更加复杂的泛型方法。

@@ -267,3 +267,33 @@ public static <E> void swapHelper(List<E> list, int i, int j){
 };
 ```
 &emsp;&emsp;swapHelper允许我们导出比较好的基于通配符的声明，同时在内部利用更加复杂的泛型方法。
+
+## 优先考虑类型安全的异构容器
+&emsp;&emsp;通过将键（key）进行参数化而不是将容器（container）参数化，将参数化的键提交给容器，来插入或者获取值。用泛型来确保值的类型与它的键相符。可以获得更多的灵活性。
+&emsp;&emsp;当一个类的字面文字被用在方法中，来传达编译时和运行时的类型信息时，就被称作type token（类型令牌）。
+``` java
+import java.util.HashMap;
+import java.util.Map;
+
+// Typesafe heterogeneous container pattern - implementation
+// 类型安全的异构容器实现
+public class Favorites {
+    private Map<Class<?>, Object> favorites = new HashMap<>();
+
+    public <T> void putFavorite(Class<T> key, T value) {
+        if (value == null)
+            throw new NullPointerException("value is null");
+        favorites.put(key, value);
+    }
+
+    public <T> T getFavorite(Class<T> key) {
+        return key.cast(favorites.get(key));
+    }
+}
+```
+&emsp;&emsp;此处利用了Class的cast方法，将对象引用动态转换成了Class对象所表示的类型。
+&emsp;&emsp;cast方法是Java的cast操作符的动态模拟。它只检测它的参数是否为Class对象所表示的类型的实例。
+&emsp;&emsp;**注解API广泛利用了有限制的类型令牌。例如AnnotatedElement接口的getAnnotation()方法。**
+&emsp;&emsp;类Class提供了asSubclass，它将调用它的Class对象转换成用其参数表示的一个子类。
+
+## 用enum代替int常量

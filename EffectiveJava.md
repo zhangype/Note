@@ -297,3 +297,179 @@ public class Favorites {
 &emsp;&emsp;类Class提供了asSubclass，它将调用它的Class对象转换成用其参数表示的一个子类。
 
 ## 用enum代替int常量
+&emsp;&emsp;枚举天生就是不可变的，因此所有的域都应该声明为final的。
+&emsp;&emsp;可以将不同行为与每个枚举常量关联起来：在枚举类型中声明一个抽象的apply方法，并在特定于常量的的类主体中，用具体的方法覆盖每个常量的apply方法。
+``` java
+// Enum type with constant-specific method implementations
+// 特定于常量的方法实现（constant-specific method implementation）
+
+public enum Operation {
+    PLUS {
+        double apply(double x, double y) {
+            return x + y;
+        }
+    },
+    MINUS {
+        double apply(double x, double y) {
+            return x - y;
+        }
+    },
+    TIMES {
+        double apply(double x, double y) {
+            return x * y;
+        }
+    },
+    DIVIDE {
+        double apply(double x, double y) {
+            return x / y;
+        }
+    };
+
+    abstract double apply(double x, double y);
+}
+```
+
+## 用实例域代替序数
+
+## 用EnumSet实例域代替序数
+
+## 用EnumMap代替序数索引
+
+## 可以用接口模拟可伸缩的枚举
+&emsp;&emsp;虽然枚举类型不是可扩展的，但是接口类型则是可扩展的。
+``` java
+public interface Opertiaon {
+    double apply(double x, double y);
+}
+
+public enum BasicOperation implements Operation {
+    PLUS("+") {
+        public double apply(double x, double y) {
+            return x + y;
+        }
+    };
+
+    private final String symbol;
+
+    BasicOperation(String symbol) {
+        this.symbol = symbol;
+    }
+
+    @Override
+    public String toString() {
+        return symbol;
+    }
+}
+
+public enum ExtendedOperation implements Operation {
+    REMAINDER("%") {
+        public double apply(double x, double y) {
+            return x % y;
+        }
+    };
+
+    private final String symbol;
+
+    BasicOperation(String symbol) {
+        this.symbol = symbol;
+    }
+
+    @Override
+    public String toString() {
+        return symbol;
+    }
+}
+```
+
+## 注解优先命名模式
+&emsp;&emsp;通过Method.invoke的调用，反射机制会将异常封装在InvocationTargetException。
+
+## 坚持使用Override注解
+
+## 用标记接口定义类型
+&emsp;&emsp;标记接口（marker interface）是没有包含方法声明的接口，只是指明（或者“标明”）一个类实现了具有某周属性的接口。例如，Serializable。通过实现这个接口，类表明它的实例可以被写到ObjectOutputStream（或者“被序列化”）。
+
+## 检查参数有效性
+
+## 必要时进行保护性拷贝
+```java
+public final class Period {
+    private Date start;
+    private Date end;
+
+    public Period(Date start, Date end) {
+        if (start.compareTo(end) > 0) {
+            throw new IllegalArgumentException(start + "after" + end);
+        }
+        this.start = start;
+        this.end = end;
+    }
+
+    public Date getStart() {
+        return start;
+    }
+
+    public void setStart(Date start) {
+        this.start = start;
+    }
+
+    public Date getEnd() {
+        return end;
+    }
+
+    public void setEnd(Date end) {
+        this.end = end;
+    }
+
+    public static void main(String[] args) {
+        Date start = new Date();
+        Date end = new Date();
+
+        Period period = new Period(start, end);
+        end.setYear(78);
+        System.out.println("startDate:" + start);
+        System.out.println("endDate:" + end);
+        System.out.println("period startDate:" + period.getStart());
+        System.out.println("period endDate:" + period.getEnd());
+    }
+}
+```
+&emsp;&emsp;由于Date类本身是可变的，因此很容易违反“start不能在end之后”的约束。
+&emsp;&emsp;为了保护Period实例的内部信息避免受到攻击，**对于构造器的每个可变参数进行保护性拷贝是必要的**。
+``` java
+    public Period(Date start, Date end) {
+        this.start = new Date(start.getTime());
+        this.end = new Date(end.getTime());
+        if (start.compareTo(end) > 0) {
+            throw new IllegalArgumentException(start + "after" + end);
+        }
+    }
+```
+&emsp;&emsp;``对于参数类型可以被不可信任方子类化的参数，请不要使用clone方法进行保护性拷贝。``
+
+## 谨慎设计方法签名
+&emsp;&emsp;1、谨慎地选择方法的名称。
+&emsp;&emsp;2、不要过于追求提供便利的方法。
+&emsp;&emsp;3、避免过长的参数列表。目标是四个参数，或者更少。
+
+## 谨慎重载
+&emsp;&emsp;``要调用哪个重载（overloading）方法是在编译时做出决定的。``
+&emsp;&emsp;``对于重载方法的选择是静态的，而对于被覆盖的方法的选择是动态的。``
+&emsp;&emsp;**“能够重载方法”并不意味着就“应该重载方法”。一般情况下，对于多个具有相同参数数目的方法来说，应该尽量避免重载方法。应该避免这样的情形：同一组参数只需经过类型转换就可以被传递给不同的重载方法。如果不能避免这种情形，例如，因为正在改造一个现有的类似实现新的接口，就应该保证：当传递同样的参数时，所有重载方法的行为必须一致。如果不能做到这一点，程序员就很难有效地使用被重载的方法或者构造器，他们就不能理解它为什么不能正常工作。**
+
+## 慎用可变参数
+&emsp;&emsp;在重视性能的情况下，使用可变参数机制要特别小心。可变参数方法的每次调用都会导致进行一次数组分配和初始化。
+
+## 返回零长度的数组或者集合，而不是null
+&emsp;&emsp;集合值的方法也可以做成在每当需要返回空集合时都返回同一个不可变的空集合。例如Collections.emptySet、emptyList和emptyMap方法。
+
+## 为所有导出的API元素编写文档注释
+&emsp;&emsp;为了正确地编写API文档，必须在每个被导出的类、接口、构造器、方法和域声明之前增加一个文档注释。如果类是可序列化的，也应该对它的序列化形式编写文档。
+&emsp;&emsp;Javadoc的{@code}标签有两个作用：造成该代码片段以代码体进行呈现，并限制HTML标记和嵌套的Javadoc标签在代码片段中进行处理。
+&emsp;&emsp;为了产生包含HTML元字符的文档，比如小于号（<）、大于号（>）以及“与”（&），必须采取特殊的动作。让这些字符出现在文档中的最佳方法是用{@literal}标签将它们包围起来，这样就限制了HTML标记和嵌套的Javadoc便签的处理。
+
+## 将局部变量的作用域最小化
+&emsp;&emsp;要使局部变量的作用域最小化，最有力的方法就是在第一次使用它的地方声明。
+&emsp;&emsp;几乎每个局部变量的声明都应该包含一个初始化表达式。如果没有足够的信息来对一个变量进行有意义的初始化，就应该推迟这个声明，直到可以初始化为止。&emsp;&emsp;最后一种“将局部变量的作用域最小化”的方法是使方法小而集中。如果把两个操作合并到同一个方法中，与其中一个操作相关的局部变量就有可能会出现在执行另一个操作的代码范围之内。为了防止这种情况发生，只要把这个方法分成两个，每个方法各执行一个操作。
+
+## for-each循环优先于传统的for循环

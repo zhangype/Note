@@ -561,3 +561,5 @@ for (Iterator<Face> i = faces.iterator(); i.hasNext();)
 &emsp;&emsp;```永远不要声明一个方法“throws Exception”，或者更糟糕的是声明“throws Throwble”，这是一个非常极端的例子。```
 
 ## 在细节消息中包含能捕获失败的信息
+
+## 努力使失败保持原子性

@@ -563,3 +563,50 @@ for (Iterator<Face> i = faces.iterator(); i.hasNext();)
 ## 在细节消息中包含能捕获失败的信息
 
 ## 努力使失败保持原子性
+&emsp;&emsp;一般而言，失败的方法调用应该使对象保持在被调用之前的状态。具有这种属性的方法被称为具有失败原子性。
+&emsp;&emsp;有几种途径可以实现这种效果：
+&emsp;&emsp;最简单的方法，设计一个不可变的对象。如果一个操作失败了，它可能会阻止创建新的对象，但是永远也不会使已有的对象保持在不一致的状态之中，因为当每个对象被创建之后，它处于一致的状态之中，以后也不会再发生变化。
+
+## 同步访问共享的数据
+&emsp;&emsp;如果读和写操作没有都被同步，同步就不会起作用。
+
+## 避免过度同步
+&emsp;&emsp;在同步区域之外被调用的外来方法被称作“开放调用（open call）”。除了可以避免死锁之外，开放调用还可以极大地增加并发性。
+&emsp;&emsp;外来方法的运行时间可能会任意长。如果在同步区域内调用外来方法，其他线程对受保护资源的访问就会遭到不必要的拒绝。
+&emsp;&emsp;**通常，应该在同步区域内做尽可能少的工作。**获得锁，检查共享数据，根据需要转换数据，然后放掉锁。如果你必须要执行某个很耗时的工作，则应该设法把这个动作移到同步区域的外面。
+&emsp;&emsp;如果一个可变的类要并发使用，应该使这个类变成是线程安全的，通过内部同步，还可以获得明显比从外部锁定整个对象更高的并发性。否则，就不要在内部同步。让客户在必要的时候从外部同步。
+&emsp;&emsp;如果你在内部同步了类，就可以使用不同的方法来实现高并发性，例如分拆锁（lock splitting）、分离锁（lock striping）和非阻塞（nonblocking）并发控制。
+&emsp;&emsp;如果方法修改了静态域，那么必须同步对这个域的访问，即使它往往只用于单个线程。客户要在这种方法上执行外部同步是不可能的，因为不可能保证其他的客户也会执行外部同步。
+
+## executor和task优先于线程
+&emsp;&emsp;Executor Framework相关内容可参考《Java Concurrency in Practice》一书。
+
+## 并发工具优先于wait和notify
+&emsp;&emsp;java.util.concurrent中更高级的工具分成三类：Executor Framework、并发集合（Concurrent Collection）以及同步器（Synchronizer）。
+&emsp;&emsp;**并发集合中不可能排除并发活动；将它锁定没有什么作用，只会使程序的速度变慢。**
+&emsp;&emsp;同步器（Synchronizer）是一些使线程能够等待另一个线程的对象，允许它们协调动作。最常用的同步器是CountDownLatch和Semaphore。较不常用的是CyclicBarrier和Exchanger。
+&emsp;&emsp;对于间歇式的定时，始终应该优先使用System.nanoTime，而不是使用System.currentTimeMills。
+&emsp;&emsp;使用wait方法的标准模式：
+``` java
+synchronized(obj){
+    while(<condition does not hold>){
+        obj.wait();//(Releases lock, and reacquires on wakeup)
+    }
+    ...// Perform action appropriate to condition 
+}
+```
+&emsp;&emsp;**始终应该使用wait循环模式来调用wait方法；永远不要在循环之外调用wait方法。**循环会在等待之前和之后测试条件。
+
+## 线程安全性的文档化
+&emsp;&emsp;线程安全性有多个级别：
+&emsp;&emsp;1、不可变的（immutable）——这个类的实例时不可变的。所以，不需要外部的同步。这样的例子包括String、Long和BigInteger。
+&emsp;&emsp;2、无条件的线程安全（unconditionally thread-safe）——这个类的实例时可变的，但是这类有着足够的内部同步，所以，它的实例可以被并发使用，无需任何外部同步。其例子包括Random和ConcurrentHashMap。
+&emsp;&emsp;3、有条件的线程安全（conditionally thread-safe）——除了有些方法为进行安全的并发使用而需要外部同步之外，这种线程安全级别与无条件的线程安全相同。这样的例子包括Collecitons.synchronized包装返回的集合。它们的迭代器是（iterator）要求外部同步。
+&emsp;&emsp;4、非线程安全（not thread-safe）——这个类的实例是可变的。为了并发地使用它们，客户必须利用自己选择的外部同步包围每个方法调用（或者调用序列）。这样的例子包括通用的集合实现，例如ArrayList和HashMap。
+&emsp;&emsp;5、线程对立的（thread-hostile）——这个类不能安全地被多个线程并发使用，即使所有的方法调用都被外部同步包围。线程对立的根源通常在于，没有同步地修改静态数据。
+
+## 慎用延迟初始化
+
+## 不要依赖于线程调度器
+
+## 避免使用线程组

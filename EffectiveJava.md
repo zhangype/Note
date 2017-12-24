@@ -610,3 +610,11 @@ synchronized(obj){
 ## 不要依赖于线程调度器
 
 ## 避免使用线程组
+
+## 谨慎地实现Serializable接口
+&nbsp;&nbsp;**实现Serializable接口而付出的最大代价是，一旦一个类被发布，就大大降低了“改变这个类的实现”的灵活性。
+&nbsp;&nbsp;序列化会使类的演变收到限制，这种限制的一个例子与**流的唯一标识符（stream unique identifier）**有关，通常它也被称为**序列版本UID（serial version UID）**。每个可序列化的类都有一个唯一标识号与它想关联。如果你没在一个名为serialVersionUID的稀有静态fianl的long域中显式地指定该标志符号，系统就会自动地根据这个类来调用一个复杂的运算过程，从而在运行时产生该标识号。这个自动产生的值会受到类名称、它所实现的接口的名称、以及所有共有的和受保护的成员的名称所受影响。如果你通过任何方式改变了这些信息，比如增加了一个不是很重要的工具方法，自动产生的序列版本UID也会发生变化。因此，如果没有声明一个显式的序列版本UID，兼容性将会遭到破坏，在运行时导致InvalidClassException异常。
+&nbsp;&nbsp;**为了继承而设计的类应该尽可能少地去实现Serializable接口，用户的接口也应该尽可能少地继承Serializable接口。**在为了继承而设计的类中，真正实现了Serializable接口的有Throwable类、Component和HttpServlet抽象类。因为Throwable类实现了Serializable接口，所以RMI的异常可以从服务器端传到客户端。Component实现了Serializable接口，因此GUI可以被发送、保存和恢复。HttpServlet实现了Serializable接口，因此会话状态可以被（session state）缓存。
+&nbsp;&nbsp;**内部类（inner class）不应该实现Serializable。内部类的默认序列化形式是定义不清楚的。然而，静态成员类（static member class）却可以实现Serializable接口。**``实现Serializable接口是个很严肃的承诺，必须认真对待。``在“允许子类实现Serializable接口”或“禁止子类实现Serializable接口”两者之间的一个折中设计方案是，提供一个可访问的无参构造器。这种设计方案（但不要求）子类实现Serializable接口。
+
+## 考虑使用自定义的序列化形式

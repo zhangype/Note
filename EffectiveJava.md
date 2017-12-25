@@ -618,3 +618,29 @@ synchronized(obj){
 &nbsp;&nbsp;**内部类（inner class）不应该实现Serializable。内部类的默认序列化形式是定义不清楚的。然而，静态成员类（static member class）却可以实现Serializable接口。**``实现Serializable接口是个很严肃的承诺，必须认真对待。``在“允许子类实现Serializable接口”或“禁止子类实现Serializable接口”两者之间的一个折中设计方案是，提供一个可访问的无参构造器。这种设计方案（但不要求）子类实现Serializable接口。
 
 ## 考虑使用自定义的序列化形式
+&nbsp;&nbsp;当一个对象的物理表示法与它的逻辑数据内容有实质性的区别时，使用默认序列化形式会有以下4个缺点：  
+&nbsp;&nbsp;**1、它是这个类的导出API永远地束缚在该类的内部表示法上。**
+&nbsp;&nbsp;**2、它会消耗很多的空间。**  
+&nbsp;&nbsp;**3、它会消耗很多的时间。**序列化逻辑并不了解对象图的拓扑关系，所以它必须经过一个昂贵的图遍历过程。
+&nbsp;&nbsp;**4、它会引起栈溢出**
+&nbsp;&nbsp;**如果所有的实例域都是瞬时的，从技术角度而言，不调用defaultWriteObject和defaultReadObject也是允许的，但是不推荐这么做。**即使所有的实例域都是transient的，调用defaultWriteObject也会影响该类的序列化形式，从而极大地增强灵活性。这样得到德尔序列化形式允许在以后的发行版本中增加非transient的实例域，并且还能保持向前或者向后的兼容性。
+&nbsp;&nbsp;以下情况应当将域标记为transient：
+&nbsp;&nbsp;●值可以根据其他“基本数据域”计算而得到。
+&nbsp;&nbsp;●值依赖与JVM的某一次运行。
+&nbsp;&nbsp;如果使用默认的序列化形式，并且把域标记为transient，当实例被反序列化的时候，这些域将被初始化为它们的默认值。对于对象引用域，默认值为null。
+&nbsp;&nbsp;无论是否使用默认的序列化形式，**如果在读取整个对象状态的任何其他方法上强制任何同步，则也必须在对象序列化上强制这种同步。**因此，如果有一个线程安全的对象，通过同步每个方法实现了它的线程安全，并且选择使用默认的序列化形式。就要使用下列的writeObject方法：
+``` java
+private synchronized void writeObject(ObjectOutputStream s) throws IOExceprtion {
+    s.defaultWriteObject();
+}
+```
+
+## 保护性地编写readObject方法
+&nbsp;&nbsp;对于非final的可序列化的类，在readObject方法和构造器之间还有其他类似的地方。readObject方法不可以调用可被覆盖的方法，无论是直接使用还是间接调用都不可以。
+&nbsp;&nbsp;以下指导方正有助于编写出更加及健壮的readObject方法：
+>&nbsp;&nbsp;●对于对象引用域必须保持为私有的类，要保护性地拷贝这些域中的每个对象。不可变类的可变组件就属于这一类别。
+>&nbsp;&nbsp;●对于任何约束条件检查动作，都应该跟在所有的保护性拷贝之后。
+>&nbsp;&nbsp;●如果整个对象图在被反序列化之后进行验证，就应该使用ObjectInputValidation接口。
+>&nbsp;&nbsp;●无论是直接方式还是间接方式，都不要调用类中任何可被覆盖的方法。
+
+## 对于实例控制，枚举类型优先于readResolve

@@ -140,7 +140,7 @@ public static final Thing[] values(){
 ## 在公有类中使用访问方法而非公有域
 
 ## 使可变性最小化
-&emsp;&emsp;为了使类成为不可变，要遵循五条原则：
+&emsp;&emsp;为了使类成为不可变，要遵循五条原则：  
 &emsp;&emsp;1.不要提供任何会修改对象状态的方法。
 &emsp;&emsp;2.保证类不会被拓展。
 &emsp;&emsp;3.使所有的域都是final的。

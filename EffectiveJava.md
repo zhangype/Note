@@ -612,23 +612,23 @@ synchronized(obj){
 ## 避免使用线程组
 
 ## 谨慎地实现Serializable接口
-&nbsp;&nbsp;**实现Serializable接口而付出的最大代价是，一旦一个类被发布，就大大降低了“改变这个类的实现”的灵活性。  
-&nbsp;&nbsp;序列化会使类的演变收到限制，这种限制的一个例子与**流的唯一标识符（stream unique identifier）**有关，通常它也被称为**序列版本UID（serial version UID）**。每个可序列化的类都有一个唯一标识号与它想关联。如果你没在一个名为serialVersionUID的稀有静态fianl的long域中显式地指定该标志符号，系统就会自动地根据这个类来调用一个复杂的运算过程，从而在运行时产生该标识号。这个自动产生的值会受到类名称、它所实现的接口的名称、以及所有共有的和受保护的成员的名称所受影响。如果你通过任何方式改变了这些信息，比如增加了一个不是很重要的工具方法，自动产生的序列版本UID也会发生变化。因此，如果没有声明一个显式的序列版本UID，兼容性将会遭到破坏，在运行时导致InvalidClassException异常。  
-&nbsp;&nbsp;**为了继承而设计的类应该尽可能少地去实现Serializable接口，用户的接口也应该尽可能少地继承Serializable接口。**在为了继承而设计的类中，真正实现了Serializable接口的有Throwable类、Component和HttpServlet抽象类。因为Throwable类实现了Serializable接口，所以RMI的异常可以从服务器端传到客户端。Component实现了Serializable接口，因此GUI可以被发送、保存和恢复。HttpServlet实现了Serializable接口，因此会话状态可以被（session state）缓存。  
-&nbsp;&nbsp;**内部类（inner class）不应该实现Serializable。内部类的默认序列化形式是定义不清楚的。然而，静态成员类（static member class）却可以实现Serializable接口。**``实现Serializable接口是个很严肃的承诺，必须认真对待。``在“允许子类实现Serializable接口”或“禁止子类实现Serializable接口”两者之间的一个折中设计方案是，提供一个可访问的无参构造器。这种设计方案（但不要求）子类实现Serializable接口。  
+&emsp;&emsp;**实现Serializable接口而付出的最大代价是，一旦一个类被发布，就大大降低了“改变这个类的实现”的灵活性。  
+&emsp;&emsp;序列化会使类的演变收到限制，这种限制的一个例子与**流的唯一标识符（stream unique identifier）**有关，通常它也被称为**序列版本UID（serial version UID）**。每个可序列化的类都有一个唯一标识号与它想关联。如果你没在一个名为serialVersionUID的稀有静态fianl的long域中显式地指定该标志符号，系统就会自动地根据这个类来调用一个复杂的运算过程，从而在运行时产生该标识号。这个自动产生的值会受到类名称、它所实现的接口的名称、以及所有共有的和受保护的成员的名称所受影响。如果你通过任何方式改变了这些信息，比如增加了一个不是很重要的工具方法，自动产生的序列版本UID也会发生变化。因此，如果没有声明一个显式的序列版本UID，兼容性将会遭到破坏，在运行时导致InvalidClassException异常。  
+&emsp;&emsp;**为了继承而设计的类应该尽可能少地去实现Serializable接口，用户的接口也应该尽可能少地继承Serializable接口。**在为了继承而设计的类中，真正实现了Serializable接口的有Throwable类、Component和HttpServlet抽象类。因为Throwable类实现了Serializable接口，所以RMI的异常可以从服务器端传到客户端。Component实现了Serializable接口，因此GUI可以被发送、保存和恢复。HttpServlet实现了Serializable接口，因此会话状态可以被（session state）缓存。  
+&emsp;&emsp;**内部类（inner class）不应该实现Serializable。内部类的默认序列化形式是定义不清楚的。然而，静态成员类（static member class）却可以实现Serializable接口。**``实现Serializable接口是个很严肃的承诺，必须认真对待。``在“允许子类实现Serializable接口”或“禁止子类实现Serializable接口”两者之间的一个折中设计方案是，提供一个可访问的无参构造器。这种设计方案（但不要求）子类实现Serializable接口。  
 
 ## 考虑使用自定义的序列化形式
-&nbsp;&nbsp;当一个对象的物理表示法与它的逻辑数据内容有实质性的区别时，使用默认序列化形式会有以下4个缺点：    
-&nbsp;&nbsp;**1、它是这个类的导出API永远地束缚在该类的内部表示法上。**  
-&nbsp;&nbsp;**2、它会消耗很多的空间。**    
-&nbsp;&nbsp;**3、它会消耗很多的时间。**序列化逻辑并不了解对象图的拓扑关系，所以它必须经过一个昂贵的图遍历过程。  
-&nbsp;&nbsp;**4、它会引起栈溢出**  
-&nbsp;&nbsp;**如果所有的实例域都是瞬时的，从技术角度而言，不调用defaultWriteObject和defaultReadObject也是允许的，但是不推荐这么做。**即使所有的实例域都是transient的，调用defaultWriteObject也会影响该类的序列化形式，从而极大地增强灵活性。这样得到德尔序列化形式允许在以后的发行版本中增加非transient的实例域，并且还能保持向前或者向后的兼容性。  
-&nbsp;&nbsp;以下情况应当将域标记为transient：  
-&nbsp;&nbsp;●值可以根据其他“基本数据域”计算而得到。  
-&nbsp;&nbsp;●值依赖与JVM的某一次运行。  
-&nbsp;&nbsp;如果使用默认的序列化形式，并且把域标记为transient，当实例被反序列化的时候，这些域将被初始化为它们的默认值。对于对象引用域，默认值为null。  
-&nbsp;&nbsp;无论是否使用默认的序列化形式，**如果在读取整个对象状态的任何其他方法上强制任何同步，则也必须在对象序列化上强制这种同步。**因此，如果有一个线程安全的对象，通过同步每个方法实现了它的线程安全，并且选择使用默认的序列化形式。就要使用下列的writeObject方法：  
+&emsp;&emsp;当一个对象的物理表示法与它的逻辑数据内容有实质性的区别时，使用默认序列化形式会有以下4个缺点：    
+&emsp;&emsp;**1、它是这个类的导出API永远地束缚在该类的内部表示法上。**  
+&emsp;&emsp;**2、它会消耗很多的空间。**    
+&emsp;&emsp;**3、它会消耗很多的时间。**序列化逻辑并不了解对象图的拓扑关系，所以它必须经过一个昂贵的图遍历过程。  
+&emsp;&emsp;**4、它会引起栈溢出**  
+&emsp;&emsp;**如果所有的实例域都是瞬时的，从技术角度而言，不调用defaultWriteObject和defaultReadObject也是允许的，但是不推荐这么做。**即使所有的实例域都是transient的，调用defaultWriteObject也会影响该类的序列化形式，从而极大地增强灵活性。这样得到德尔序列化形式允许在以后的发行版本中增加非transient的实例域，并且还能保持向前或者向后的兼容性。  
+&emsp;&emsp;以下情况应当将域标记为transient：  
+&emsp;&emsp;●值可以根据其他“基本数据域”计算而得到。  
+&emsp;&emsp;●值依赖与JVM的某一次运行。  
+&emsp;&emsp;如果使用默认的序列化形式，并且把域标记为transient，当实例被反序列化的时候，这些域将被初始化为它们的默认值。对于对象引用域，默认值为null。  
+&emsp;&emsp;无论是否使用默认的序列化形式，**如果在读取整个对象状态的任何其他方法上强制任何同步，则也必须在对象序列化上强制这种同步。**因此，如果有一个线程安全的对象，通过同步每个方法实现了它的线程安全，并且选择使用默认的序列化形式。就要使用下列的writeObject方法：  
 ``` java
 private synchronized void writeObject(ObjectOutputStream s) throws IOExceprtion {
     s.defaultWriteObject();
@@ -636,11 +636,50 @@ private synchronized void writeObject(ObjectOutputStream s) throws IOExceprtion 
 ```
 
 ## 保护性地编写readObject方法
-&nbsp;&nbsp;对于非final的可序列化的类，在readObject方法和构造器之间还有其他类似的地方。readObject方法不可以调用可被覆盖的方法，无论是直接使用还是间接调用都不可以。  
-&nbsp;&nbsp;以下指导方正有助于编写出更加及健壮的readObject方法：  
->&nbsp;&nbsp;●对于对象引用域必须保持为私有的类，要保护性地拷贝这些域中的每个对象。不可变类的可变组件就属于这一类别。  
->&nbsp;&nbsp;●对于任何约束条件检查动作，都应该跟在所有的保护性拷贝之后。  
->&nbsp;&nbsp;●如果整个对象图在被反序列化之后进行验证，就应该使用ObjectInputValidation接口。  
->&nbsp;&nbsp;●无论是直接方式还是间接方式，都不要调用类中任何可被覆盖的方法。  
+&emsp;&emsp;对于非final的可序列化的类，在readObject方法和构造器之间还有其他类似的地方。readObject方法不可以调用可被覆盖的方法，无论是直接使用还是间接调用都不可以。  
+&emsp;&emsp;以下指导方正有助于编写出更加及健壮的readObject方法：  
+>&emsp;&emsp;●对于对象引用域必须保持为私有的类，要保护性地拷贝这些域中的每个对象。不可变类的可变组件就属于这一类别。  
+>&emsp;&emsp;●对于任何约束条件检查动作，都应该跟在所有的保护性拷贝之后。  
+>&emsp;&emsp;●如果整个对象图在被反序列化之后进行验证，就应该使用ObjectInputValidation接口。  
+>&emsp;&emsp;●无论是直接方式还是间接方式，都不要调用类中任何可被覆盖的方法。  
 
 ## 对于实例控制，枚举类型优先于readResolve
+&emsp;&emsp;对于一个正在被反序列化的对象，如果它的定义了一个readResolve方法，那么在反序列化之后，新建对象上的readResolve方法就会被调用。然后，该方法返回的对象引用将被返回，取代新建的对象。  
+&emsp;&emsp;**readResolve的可访问性（accessibility）很重要。**如果把readResolve方法放在一个final类上，它就是应该是私有的。``如果readResolve方法是受保护的或者公有的并且子类没有覆盖它，对序列化过的子类实例进行反序列化，就会产生一个超类实例，这样有可能导致ClassCastException异常。``  
+&emsp;&emsp;总之，应该尽可能地使用枚举类型来实施实例控制的约束条件。如果做不到，同时又需要一个既可以序列化又是实例受控（instance-controlled）的类，就必须提供一个readResolver方法，并确保该类的所有实例域都为基本类型，或者是transient的。
+
+## 考虑使用序列化代理代替序列化实例
+&emsp;&emsp;首先，为可序列化的类设计一个私有的静态嵌套类，精确地表示外围类的实例的逻辑状态。这个嵌套类被称作**序列化代理**，它应该有个一单独的构造器，其参数类型就是外围类。这个构造器只从它的参数中复制数据：它不需要进行任何一致性检查或者保护性拷贝。外围类机器序列化代理都必须声明实现Serializable接口。
+``` java
+    private static class SerializationProxy implements Serializable {
+        private final Date start;
+        private final Date end;
+
+        SerializationProxy(Period p) {
+            this.start = p.start;
+            this.end = p.end;
+        }
+
+        private static final long serialVersionUID = 53544646545455L;
+    }
+```
+&emsp;&emsp;在外围类中，添加writeReplace方法。通过序列化代理，这个方法可以被逐字地复制到任何类中。
+``` java
+    private Object writeReplace(){
+        return new SerializationProxy(this);
+    }
+```
+&emsp;&emsp;有了这个writeReplace方法之后，序列化系统永远不会产生外围类的序列化实例，但是攻击者有可能伪造，企图违反该类的约束条件。为了确保这种攻击无法得逞，只要在外围类中添加这个readObject方法即可：
+``` java
+    private void readObject(ObjectInputStream stream) throws InvalidObjectException{
+        throw new InvalidObjectException("Proxy required");
+    }
+```
+&emsp;&emsp;最后，在SerializationProxy 类中提供readResolve方法，它返回一个逻辑上相当的外围类的实例。  
+&emsp;&emsp;readResolve方法仅仅利用它的公有API创建外围类的一个实例，它极大地消除了序列化机制中语言本身之外的特征，因为反序列化实例是利用与任何其他实例相同的构造器、静态工厂和方法创建的。这样就不必单独确保被反序列化的实例一定要遵守类的约束条件。
+``` java
+    private Object readResolve() {
+        return new Period(start, end);
+    }
+```
+&emsp;&emsp;序列化代理模式有两个局限性。它不能与可以被客户端拓展的类兼容。也不能与对象图中包含循环的某些类兼容。

@@ -106,3 +106,78 @@
 &nbsp;&nbsp;关于服务实例类的配置信息，可以通过查看 org.springframework.cloud.netflix.eureka.EurekaInstanceConfigBean 的源码来获取详细内容，这些配置信息都以 eureka.instance 为前缀。  
 #### 元数据
 &nbsp;&nbsp;在  org.springframework.cloud.netflix.eureka.EurekaInstanceConfigBean 的配置信息中，有一大部分内容都是对服务实例元数据的配置。元数据是 Eureka 客户端在向服务注册中心发送注册请求时，用来描述自身服务信息的对象，其中包含了一些标准化的元数据，比如服务名称、实例名称、实例IP、实例端口等用于服务治理的重要信息；以及一些用于负载均衡策略或者是其他特殊用途的自定义元数据。  
+# 客户端负载均衡：Spring Cloud Ribbon
+&nbsp;&nbsp; Spring Cloud Ribbon 是一个基于 HTTP 和 TCP 的客户端负载均衡工具，它基于 Netflix Ribbon 实现。  
+### 自动化配置
+&nbsp;&nbsp; 通过自动化配置的实现，可以轻松地实现客户端负载均衡。同时，针对一些个性化需求，也可以方便地替换默认实现。只需要在 Spring Boot 应用中创建对应的实现实例就能覆盖这些默认的配置实现。比如下面的配置内容，由于创建了 PingUrl 实例，所以默认的 NoOpPing 就不会被创建。  
+``` java
+	@Configuration
+	public class MyRibbonConfiguration {
+		@Bean
+		public IPing ribbonPing (IClientConfig config) {
+			return new PingUrl();
+		}
+	}
+```
+&nbsp;&nbsp; 另外，也可以通过使用 @RibbonClient 注解来实现更细粒度的客户端配置，比如下面的代码实现了为 hello-service 服务使用 HelloServiceConfiguration 中的配置。  
+``` java
+	@Configuration
+	@RibbonClient(name = "hello-service", configuration = HelloServiceConfiguration.class)
+	public class RibbonConfiguration {
+	}
+```
+### Camden 版本对 RibbonClient 配置的优化
+&nbsp;&nbsp; 可以直接通过&lt;clientName&gt;.ribbon.&lt;key&gt;=&lt;value&gt;的形式进行配置。比如将 hello-service 服务客户端的 IPing 接口实现替换为 PingUrl，只需在 application.properties 配置中增加如下内容即可：  
+> hello-service.ribbon.NFLoadBalancePingClassName=com.netflix.loadbalancer.PingUrl
+
+&nbsp;&nbsp; 其中 hello-service 为服务名， NFLoadBalancePingClassName 参数用来指定具体的 IPing 接口实现类。  
+&nbsp;&nbsp; 全局配置方式：使用 ribbon.&lt;key&gt;=&lt;value&gt;格式进行配置即可。其中，&lt;key&gt;代表了  Ribbon 客户端配置的参数名，&lt;value&gt;则代表了对应参数的值。  
+> ribbon.ConnectTimeout=250
+
+### 与 Eureka 结合
+&nbsp;&nbsp; 当 Spring Cloud 的应用中同时引入 Spring Cloud Ribbon 和 Spring Cloud Eureka 依赖时，会触发 Eureka 中实现的对 Ribbon 自动化配置。  
+### 重试机制
+&nbsp;&nbsp; Spring Cloud Euraka 实现的服务治理机制强调了 CAP 原理中的 AP，及可用性与可靠性，它与 ZooKeeper 这类强调 CP （一致性、可靠性）的服务治理框架的最大区别就是， Eureka 为了实现更高的服务可用性，牺牲了一定的一致性，在极端情况下它宁愿接受故障实例也不丢掉“健康实例”。  
+# 服务容错保护： Spring Cloud Hystrix
+## 工作流程
+![Hytrix流程图](./Hytrix流程图.png)
+&nbsp;&nbsp;**1、创建 HystrixCommand 或 HystrixObservableCommand 对象**  
+&nbsp;&nbsp;**2、命令执行**  
+&nbsp;&nbsp;HystrixCommand 实现了下面两个执行方式。  
+&nbsp;&nbsp;●execute()：同步执行，从依赖的服务返回一个单一的结果对象，或是在发生错误的时候抛出异常。  
+&nbsp;&nbsp;●queue()：异步执行，直接返回一个 Future 对象，其中包含了服务执行结束时要返回的单一结果对象。  
+``` java
+	R value = command.execute();
+	Future<R> fValue = command.queue();
+```
+&nbsp;&nbsp;HystrixObservableCommand 实现了另外两种执行方式。  
+&nbsp;&nbsp;●observe()：返回 Observable 对象，它代表了操作的多个结果，它是一个 HotObservable 。  
+&nbsp;&nbsp;●toObservable()：同样会返回 Observable 对象，也代表了操作的多个结果，但它返回的是一个Cold Observable。  
+``` java
+	Observable<R> ohValue = command.observe();
+	Observable<R> ocValue = command.observe();
+```
+&nbsp;&nbsp;其中 Hot Observable ，不论“事件源”是否有“订阅者”，都会在创建后对事件进行发布，所以对于 Hot Observable 的每一个“订阅者”都有可能从“事件源”的中途开始的，并可能只看到了整个操作的局部过程。  
+&nbsp;&nbsp;Cold Observable 在没有“订阅者”的时候并不会发布事件，而是进行等待，直到有“订阅者”之后才发布事件。所以对于Cold Observable 的订阅者，它可以保证从一开始看到整个操作的全部过程。  
+&nbsp;&nbsp;**3、结果是否被缓存**  
+&nbsp;&nbsp;若当前命令的请求缓存功能是否被启用的，并且该命令缓存命中，那么缓存的结果会立即以 Observable 对象的形式返回。  
+&nbsp;&nbsp;**4、断路器是否打开**  
+&nbsp;&nbsp;如果断路器是打开的，那么 Hystrix 不会执行命令，而是转接到 fallback 处理逻辑（对应下面第8步）。  
+&nbsp;&nbsp;如果断路器是关闭的，那么 Hystrix 跳到第5步，检查是否有可用资源来执行命令。  
+&nbsp;&nbsp;**5、线程池/请求队列/信号量是否占满**  
+&nbsp;&nbsp;如果与命令相关的线程池和请求队列，或者信号量（不使用线程池的时候）已经被占满，那么 Hystrix 也不会执行命令，而是转接到 fallback 处理逻辑（对应下面的第8步）。  
+&nbsp;&nbsp;**6、HystrixObservableCommand.construct() 或 HystrixCommand.run()**  
+&nbsp;&nbsp;Hystrix 会根据编写的方法来决定采取什么样的方式去请求依赖服务。  
+&nbsp;&nbsp;●HystrixCommand.run()：返回一个单一的结果，或者抛出异常。  
+&nbsp;&nbsp;●HystrixObservableCommand.construct() ：返回一个 Observable 对象来发射多个结果，或者通过 onError 发送错误通知。
+&nbsp;&nbsp;**7、计算短路器的健康度**  
+&nbsp;&nbsp;Hystrix 会将 “成功”、“拒绝”、“超时”等信息报告给断路器，而断路器会维护一组计数器来统计这些数据。  
+&nbsp;&nbsp;断路器会使用这些统计数据来决定是否将断路器打开，来对某个依赖服务的请求记性“熔断/短路”，直到恢复期结束。若在恢复期结束后，根据统计数据判断如果还是未达到健康指标，就再次“熔断/短路”。  
+&nbsp;&nbsp;**8、fallback处理**  
+&nbsp;&nbsp;**9、返回成功的响应**
+&nbsp;&nbsp;当 Hystrix 命令执行成功之后，它会将处理结果直接返回或是以 Observable 的形式返回。具体返回方式取决于第2步中我们所提到的对命令的4中不同执行方式，下图中总结了这四种调用方式之间的依赖关系。  
+![依赖关系](./依赖关系.png)
+&nbsp;&nbsp;● toObservable()：返回最原始的 Observable，必须通过订阅它才会真正触发命令的执行流程。  
+&nbsp;&nbsp;● observe()：在toObservable()产生原始 Observable 之后立即订阅它，让命令能够马上开始异步执行，并返回一个 Observable 对象，当调用它的subscribe时，将重新产生结果和通知给订阅者。  
+&nbsp;&nbsp;● queue()：将 toObservable()产生的原始 Observable 通过 toBlocking() 方法转换成 BlockingObservable 对象，并调用它的 toFuture() f方法返回异步的 Future 对象。  
+&nbsp;&nbsp;● execute()：在 queue() 产生异步结果 Future 对象之后，通过调用 get() 方法阻塞并等待结果的返回。  

@@ -379,3 +379,109 @@ User getUserById(String id) {
 	return restTemplate.getForObject("http://USER-SERVICE/users/{1}", User.class, id);
 }
 ```
+### 请求缓存
+#### 开启请求缓存功能
+&nbsp;&nbsp;通过重写 getCacheKey() 方法来开启请求缓存。  
+``` java
+@Override
+protected String getCacheKey() {
+}
+```
+&nbsp;&nbsp;通过在 getCacheKey 方法中返回的请求缓存 key 值，使得该命令具备了缓存功能。当不同的外部请求处理逻辑调用了同一个依赖服务时， Hystrix 会根据 getCacheKey 方法返回的值来区分是否是重复的请求，如果 cacheKey 相同，那么该依赖服务只会在第一个请求到达时被真实地调用一次，其他的请求将直接从请求缓存中返回结果。请求缓存在 run() 和 construct() 执行之前生效，可以减少不必要的线程开销。  
+#### 清理失效缓存功能
+&nbsp;&nbsp;如果请求命令中有更新数据的写操作，那么缓存中的数据就需要在进行写操作时进行及时处理，以防止读操作的请求命令获取了失效的数据。  
+&nbsp;&nbsp;通过 HystrixRequestCache.clear() 方法进行缓存的清理。  
+``` java
+public class UserGetCommand extends HystrixCommand<User> {
+
+    private static final HystrixCommandKey GETTER_KEY = HystrixCommandKey.Factory.asKey("CommandKey");
+    private RestTemplate restTemplate;
+    private Long id;
+
+    public UserGetCommand(RestTemplate restTemplate, Long id) {
+        super(Setter.withGroupKey(HystrixCommandGroupKey.Factory.asKey("GetSetGet")));
+        this.restTemplate = restTemplate;
+        this.id = id;
+    }
+
+    @Override
+    protected User run() throws Exception {
+        return restTemplate.getForObject("http://USER-SERVICE/users/{1}", User.class, id);
+    }
+
+    @Override
+    protected String getCacheKey() {
+        // 根据 id 置入缓存
+        return String.valueOf(id);
+    }
+
+    public static void flushCache(Long id) {
+        // 刷新缓存，根据 id 进行清理
+        HystrixRequestCache.getInstance(GETTER_KEY, HystrixConcurrencyStrategyDefault.getInstance())
+                .clear(String.valueOf(id));
+    }
+}
+```
+&nbsp;&nbsp;HystrixRequestCache.getInstance(GETTER_KEY, HystrixConcurrencyStrategyDefault.getInstance()) 方法从默认的 Hystrix 并发策略中根据 GETTER_KEY 获取到该命令的请求缓存对象 HystrixRequestCache 的实例，然后再调用该请求缓存对象实例的 clear 方法，对 Key 为更新 User 的 id 值的缓存内容进行清理。  
+#### 使用注解实现请求缓存
+&nbsp;&nbsp; Hystrix 提供了专用于请求缓存的注解。  
+| 注解 | 描述         | 属性 |
+| ------------ | --------------- | ----- |
+| @CacheResult | 该注解用来标记请求命令返回的结果应该被缓存，它必须与@HystrixCommand 注解结合使用 | cacheKeyMethod |
+| @CacheRemove | 该注解用来让请求命令的缓存失效，失效的缓存根据定义的 Key 决定 | commandKey, cacheKeyMethod |
+| @CacheKey | 该注解用来在请求命令的参数上标记，使其作为缓存的 Key 值，如果没有标注则会使用所有参数。如果同时还使用了 @CacheResult 和 @CacheRemove 注解的 cacheKeyMethod 方法指定缓存 Key 的生成，那么该注解将不起作用 | value |
+
+&nbsp;&nbsp;●**设置请求缓存**： Hystrix  会将返回结果置入请求缓存中，而它的缓存 Key 值会使用所有的参数，也就是这里 Long 类型的 id 值。  
+``` java
+@CacheResult
+@HystrixCommand
+public User getUserById(String id) {
+		return restTemplate.getForObject("http://USER-SERVICE/users/{1}", User.class, id);
+}
+```
+&nbsp;&nbsp;●**定义缓存 Key**：可以使用 @CacheResult 和 @CacheRemove 注解的 cacheKeyMethod 方法来指定具体的生成函数；也可以通过使用 @CacheKey 注解在方法参数中指定用于组装缓存 Key 的元素。  
+``` java
+@CacheResult(cacheKeyMethod = "getUserByIdCacheKey")
+@HystrixCommand
+public User getUserById(Long id) {
+		return restTemplate.getForObject("http://USER-SERVICE/users/{1}", User.class, id);
+}
+
+private Long getUserByIdCacheKey(Long id) {
+	return id;
+}
+```
+&nbsp;&nbsp;@CacheKey 注解的优先级比 cacheKeyMethod 的优先级低，如果已经使用了 cacheKeyMethod 指定缓存 Key 的生成函数，那么 @CacheKey 注解不会生效。  
+``` java
+@CacheResult
+@HystrixCommand
+public User getUserById(@CacheKey("id") Long id) {
+		return restTemplate.getForObject("http://USER-SERVICE/users/{1}", User.class, id);
+}
+```
+&nbsp;&nbsp; @CacheKey 注解除了可以指定方法参数作为缓存 Key 之外，还允许访问参数对象的内部属性作为缓存 Key 。如下示例，指定了 User 对象的 id 属性作为缓存 Key。  
+``` java
+@CacheResult
+@HystrixCommand
+public User getUserById(@CacheKey("id") User user) {
+		return restTemplate.getForObject("http://USER-SERVICE/users/{1}", User.class, user.getId());
+}
+```
+&nbsp;&nbsp;●**缓存清理**：在 Hystrix 的注解配置中，可以通过 @CacheRemove 注解来实现失效缓存的清理，示例如下：
+``` java
+@CacheResult
+@HystrixCommand
+public User getUserById(@CacheKey("id") Long id) {
+		return restTemplate.getForObject("http://USER-SERVICE/users/{1}", User.class, id);
+}
+
+@CacheRemove(commandKey = "getUserById")
+@HystrixCommand
+public void update(@CacheKey("id") User user) {
+		return restTemplate.postForObject("http://USER-SERVICE/users", User.class);
+}
+```
+&nbsp;&nbsp; @CacheRemove 注解的 commandKey 属性是必须要指定的，用来指明需要使用请求缓存的请求命令，因为只有通过该属性的配置， Hystrix 才能找到正确的请求命令缓存位置。  
+### 请求合并
+&nbsp;&nbsp; 微服务框架中的依赖通常通过远程调用实现，而远程调用中最常见的问题就是通信消耗与连接数占用。在高并发的情况下，因通信次数的增加，总的通信消耗将会变得不理想。同时，由于依赖服务的线程池资源有限，将出现排队等待与相应延迟的情况。为了优化这两个问题， Hystrix 提供了 HystrixCollapser 来实现请求的合并，以减少通信消耗的线程数的占用。  
+&nbsp;&nbsp;  HystrixCollapser 实现了在 HystrixCommand 之前防止一个合并处理器，将处于一个很短的时间窗（默认10毫秒）内对同一依赖服务的多个请求进行整合并以批量方式发起请求的功能（服务提供方也需要提供相应的批量示闲接口）。通过 HystrixCollapser 的封装，开发者不需要关注线程合并的细节过程，只需要关注批量化服务和处理。  

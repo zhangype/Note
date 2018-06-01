@@ -506,8 +506,5 @@ public interface RetryPolicy {
 ![分区作业逻辑结构](PatitionStep.png)
 ![分区 Step 属性说明](PartitionStepAttribute.png)
 
-梳理：
-贷中系统中的批作业的执行顺序、条件。
-
 
 JXM服务定义[JMX的定义](https://www.cnblogs.com/dongguacai/p/5900507.html)

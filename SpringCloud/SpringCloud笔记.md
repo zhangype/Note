@@ -588,3 +588,49 @@ public void update(@CacheKey("id") User user) {
 - queueSizeRejectionThreshold：该参数用来为队列设置拒绝阈值。通过该参数，即使队列没有达到最大值也能拒绝请求。该参数主要是对 LinkedBlockingQueue 队列的补充，因为 LinkedBlockingQueue 队列不能动态修改它的对象大小，而通过该属性就可以调整拒绝请求的队列大小了。
 
 ``` 注意：当 maxQueue 属性为-1的时候，该属性不会生效。 ```
+
+#### Hystrix 仪表盘
+
+?	Hystrix Dashboard 共支持三种不同的监控方式：
+
+- **默认的集群监控**：通过 URL http://turbine-hostname:port/turbine.stream 开启，实现对默认集群的监控。
+
+- **指定的集群监控**：通过 URL http://turbine-hostname:port/turbine.stream?cluster=[clusterName] 开启，实现对 clusterName 集群的监控。
+
+- **单体应用的监控**：通过 URL http://hystrix-app:port/hystrix.stream 开启，实现对具体某个实例服务的监控。
+
+  前两者都是对集群的监控，需要整合 Turbine 才能实现。
+
+  ``只有第一次 Hystrix 请求被处理后， Hystrix Dashboard 才能进行连接监控 ``
+
+  [相关问题链接](https://github.com/Netflix/Hystrix/issues/85)
+
+# 声明式服务调用：Spring Cloud Feign
+
+``` java
+@FeignClient("hello-service")
+public interface HelloService {
+    @RequestMapping("/hello")
+    String hello();
+}
+```
+
+`` 这里服务名不区分大小写，所以使用 hello-service 和 HELLO-SERVICE 都是可以的。``
+
+## 参数绑定
+
+``` java
+@RequestMapping(value = "/hello3", method = RequestMethod.POST)
+public String hello(@RequestBody User user) {
+    return "Hello " user.getName() ", " + user.getAge();
+}
+```
+
+``` 这里 User必须要有默认构造函数。不然， Spring Cloud Feign 根据 JSON 字符串转换 User 对象时会抛出异常。```
+
+``` java
+    @RequestMapping("/hello2", method = RequestMethod.POST)
+    String hello(@RequestParam("name") String name);
+```
+
+```在定义各参数绑定时， @RequestParam 、 @RequestHeader 等可以指定参数名称的注解，它们的 value 千万不能少。在 Spring MVC 程序中，这些注解会根据参数名来作为默认值，但是在 Feign 中绑定参数必须通过 value 属性来指明具体的参数名，否则会抛出 IllegalStateException 异常， value 属性不能为空。

@@ -611,3 +611,52 @@ $ sudo docker tag 22d47c8cb6e5 docker.example.com:5000/jamtur01/static_web
 ```
 
 ​	为镜像打完标签之后，就可以通过 docker push 命令将它推送到新的 Registry 中去了。
+
+# 5 在测试中使用 Docker
+
+### 5.2.4 连接到 Redis 容器
+
+​	在安装 Docker 时，会创建一个新的网络接口，名字是 docker0 。每个 Docker 容器都会在这个接口上分配一个 IP 地址。
+
+``` bash
+$ ip a show docker0
+```
+
+​	docker0 接口有符合 RFC1918 的私有 IP 地址，范围是 172.16~172.30。接口本身的地址 172.17.42.1 是这个 Docker 网络的网关地址，也是所有 Docker 容器的网关地址。
+
+``Docker 会默认使用 172.17.x.x 作为子网地址，除非已经有别人占用了这个子网。如果这个子网被占用， Docker 会在172.16~172.30这个范围内尝试创建子网。``
+
+​	Docker 每创建一个容器就会创建一组互联的网络接口。这组接口就像管道的两端。这组接口其中一端作为容器里的 eth0 接口，而另一端统一命名为类似 vethec6a 这种名字，作为宿主机的一个端口。
+
+​	需要设置防火墙规则和 NAT 配置， Docker 网络才能允许建立连接。可以通过下面的命令查看宿主机的 IPTables NAT 配置。
+
+``` bash
+$ sudo iptables -t nat -L -n
+```
+
+### 5.2.6 让 Docker 容器互联
+
+``` bash
+$ sudo docker run -p 4567 \
+--name webapp --link redis:db -t -i \
+```
+
+​	--link 标志创建了两个容器的父子连接。这个标志需要两个参数：一个是要连接的容器名字，另一个是连接后容器的别名。
+
+``出于安全原因，可以强制 Docker 只允许有连接的容器之间互相通信。需要在启动 Docker 守护进程时加上 --icc=false 标志，关闭所有没有连接的容器间的通信。``
+
+​	Docker 在容器里的以下两个地方写入了连接信息：
+
+- /etc/hosts 文件中；
+- 包含连接信息的环境变量中。
+
+## 5.3 Docker 用于持续集成
+
+​	--privileged 标志可以启动 Docker 的特权模式，这种模式允许我们以其宿主主机具有的（几乎）所有能力来运行容器，包括一些内核特性和设备访问。
+
+​	`` 这种模式下，运行容器对 Docker 宿主机拥有 root 访问权限。``
+
+# 6 使用 Docker 构建服务
+
+## 6.2 使用 Docker 构建一个 Java 应用服务
+

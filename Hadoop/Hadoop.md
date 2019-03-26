@@ -285,3 +285,327 @@ public FSDataOutputStream append(Path f) throws IOException
 ```
 
 ​	这样的追加操作允许一个 writer 打开文件后在访问该文件的最后偏移量处追加数据。该追加操作时可选的，并非所有 Hadoop 文件系统都实现了该操作。例如， HDFS 支持追加，但 S3 文件系统就不支持。
+
+### 3.5.4 目录
+
+​	FileSystem 实例提供了创建目录的方法：
+
+```java
+public boolean mkdirs(Path f) throws IOException
+```
+
+​	这个方法可以一次性新建所有必要但还没有的目录。
+
+### 3.5.5 查询文件系统
+
+​	**1、文件元数据：FileStatus**
+
+​	任何文件系统的一个重要特征都是提供其目录结构浏览和检索它所存文件和目录相关信息的功能。 FileStatus 类封装了文件系统中文件和目录的元数据，包括文件长度、块大小、复本、修改时间、所有者以及权限信息。
+
+​	FileSystem 的 getFileStatus() 方法用于获取文件或目录的 FileStatus 对象。
+
+​	**2、列出文件**
+
+​	FileSystem 的 listStatus() 方法能够列出目录中的内容：
+
+``` java
+public FileStatus[] listStatus(Path f) throws Exception
+public FileStatus[] listStatus(Path f, PathFilter filter) throws Exception
+public FileStatus[] listStatus(Path[] files) throws Exception
+public FileStatus[] listStatus(Path[] files, PathFilter filter) throws Exception
+```
+
+​	**3、文件模式**
+
+​	Hadoop 为执行通配（ globbing ）提供了两个 FileSystem 方法。
+
+```java
+public FileStatus[] globStatus(Path pathPattern) throws IOException
+public FileStatus[] globStatus(Path pathPattern, PathFilter filter) throws IOException
+```
+
+​	**4、PathFilter 对象**
+
+### 3.5.6 删除数据
+
+​	使用 FileSystem 的 delete() 方法可以永久性删除文件或目录。
+
+``` java
+public boolean delete(Path f, boolean recursive) throws IOException
+```
+
+​	只有 recursive 为 true 时，非空目录及其内容才会被删除（否则会抛出 IOException 异常）。
+
+## 3.6 数据流
+
+### 3.6.1 剖析文件读取
+
+​	DistributedFileSystem 通过使用 RPC 来调用 namenode ，以确定文件起始块的位置。对于每一个块， namenode 返回存有该块副本的 datanode 地址。此外，这些 datanode 根据它们与客户端的距离来排序（根据网络拓扑）。如果该客户端本身就是一个 datanode（比如，在一个 MapReduce 任务中），那么该客户端将会从保存有相应数据块副本的本地 datanode 读取数据。
+
+![客户端读取HDFS中的数据](客户端读取HDFS中的数据.png)
+
+​	DistributedFileSystem 类返回一个 FSDataInputStream 对象（一个支持文件定位的输入流）给客户端以便读取数据。 FSDataInputStream 类转而封装 DFSInputStream 对象，该对象管理着 datanode 和 namenode 的 I/O 。
+
+### 3.6.2 剖析文件写入
+
+![客户端将数据写入HDFS](客户端将数据写入HDFS.png)
+
+​	客户端通过对 DistributedFileSystem 对象调用 create() 来新建文件。  DistributedFileSystem 对 namenode 创建一个 RPC 调用，在文件系统的命名空间中新建一个文件。 DistributedFileSystem 向客户端返回一个 FSDataOutputStream 对象，由此客户端可以开始写入数据。 FSDataOutputStream 封装一个 DFSoutPutStream 对象，该对象负责处理 datanode 和 namenode 之间的通信。
+
+​	在客户端写入数据时（步骤3）， DFSOutputStream 将它分成一个个的数据包，并写入内部队列，称为“数据队列”。 DataStreamer 处理数据队列，它的责任是挑选出适合存储数据复本的一组 datanode ，并据此来要求 namenode 分配新的数据块。这一组 datanode 构成一个管线（假设复本数为3，所以管线中有3个节点）。 DataStreamer 将数据包流式传输到管线中第1个 datanode ，该 datanode 存储数据包并将它发送到管线中的第2个 datanode。以此类推。
+
+​	DFSOutputStream 也维护着一个内部数据包队列来等待 datanode 的收到确认回执，称为“确认队列”。收到管线中所有的 datanode 确认信息后，该数据包才会从确认队列中删除。
+
+​	如果任何 datanode 在数据写入期间发生故障，则执行以下操作。首先关闭管线，确认把队列中的所有数据包添加回数据队列的最前端，以确保故障节点下游的 datanode 不会漏掉任何一个数据包。为存储在另一个正常 datanode 的当前数据块指定一个新的标识，并将该标识传送给 namenode，以便故障 datanode 在恢复后可以删除存储的部分数据块。从管线中删除故障 datanode ，基于两个正常的 datanode 构建一条管线。余下的数据块写入管线中正常的 datanode 。 namenode 注意到块复本量不足时，会在另一个节点上创建一个新的复本。后续的数据块继续正常接受处理。
+
+​	在一个块被写入期间可能会有多个 datanode 同时发生故障，但是非常少见。只要写入了 dfs.namenode.replication.min 的复本数（默认为1），写操作就会成功，并且这个块可以在集群中异步复制，直到达到其目标复本数（ dfs.replication 的默认值为3）。
+
+​	客户端完成数据的写入后，对数据流调用 close() 方法（步骤6）。该操作将剩余的所有数据包写入 datanode 管线，并在联系到 namenode 告知其文件写入完成之前，等待确认（步骤7）。 namenode 已经知道文件由哪些块组成（因为 DataStreamer 请求分配数据块），所以它在返回成功前只能需要等待数据块进行最小量的复制。
+
+> Hadoop 的默认布局策略是在运行客户端的节点放第1个复本（如果客户端运行在集群之外，就随机选择一个节点，不过系统会避免挑选哪些存储太满或太忙的节点）。第2个复本放在与第一个不同且随机另外选择的机架中节点上（离架）。第3个复本与第2个复本放在同一个机架上，且随机选择另一个节点。其他复本放在集群中随机选择的节点上，不过系统会尽量避免在同一个的机架是哪个放太多复本。
+
+### 3.6.3 一致模型
+
+​	新建一个文件之后，它能在文件系统的命名空间中立即可见。但是，写入文件的内容并不保证立即可见，即使数据流已经刷新并存储。当写入的数据超过一个块后，第一个块对新的 reader 就是可见的。之后的块也不列外。总之，当前正在写入的块对其他 reader 不可见。
+
+​	HDFS 提供了一个种强行将所有缓存刷新到 datanode 中的手段，即对 FSDataOutputStream 调用 hflush() 方法。当 hflush() 方法返回成功后，对所有新的 reader 而言， HDFS 能保证文件中到目前为止写入的数据均到达所有 datanode 的写入管道并且对所有新的 reader 均可见。
+
+​	但是， hflush() 不保证 datanode 已经将数据写到磁盘上，仅确保数据在 datanode 的内存中。为确保数据写入到磁盘上，可以用 hsync() 替代。
+
+​	hsync() 操作类似于 POSIX 中的 fsync() 系统调用，该调用提交的是一个文件描述符的缓冲数据。HDFS 中关闭文件起始隐含了执行 hflush() 方法。
+
+## 3.7 通过 distcp 并行复制
+
+​	Hadoop 自带的 distcp 可以并行从 Hadoop 文件系统中复制大量数据，也可以将大量数据复制到 Hadoop 中。
+
+​	distcp 的一种用法是替代 hadoop fs -cp 。例如，将文件复制到另一个文件中：
+
+``` bash
+% hadoop distcp file1 file2
+```
+
+​	也可以复制目录：
+
+``` bash
+% hadoop distcp dir1 dir2
+```
+
+​	如果 dir2 不存在，将新建 dir2，目录 dir1 的内容全部复制到 dir2 下。可以指定多个源路径，所有源路径下的内容都将被复制到目标路径下。
+
+​	如果 dir2 已经存在，name目录 dir1 将被复制到 dir2 下，形成目录结构 dir2/dir1 。可以使用 -overwrite 选项，在保持同样的目录结构的同时覆盖原有文件。也可以使用 -update 选项，仅更新发生变化的文件。
+
+​	distcp 是作为一个 MapReduce 作业来实现的，该复制作业是通过集群中并行运行 map 来完成。这里没有 reducer 。每个文件通过一个 map 进行复制，并且 distcp 试图为每一个 map 分配大致相等的数据来执行，即把文件划分为大致相等的块。默认情况下，将近20个 map 被使用，但是可以通过为 distcp 指定 -m 参数来修改 map 的数目。
+
+​	关于 distcp 的一个常见使用实例是在两个 HDFS 集群间传输数据。例如，以下命令在第二个集群上为第一个集群 /foo 目录创建一个备份：
+
+``` bash
+% hadoop distcp -update -delete -p hdfs://namenode1/foo hdfs://namenode2/foo
+```
+
+​	-delete 选项使得 distcp 可以删除目标路径中任意没有在源路径中出现的文件或目录， -p 选项意味着文件状态属性如权限、块大小和复本数被保留。
+
+​	如果两个集群运行的是 HDFS 的不兼容版本，可以将 webhdfs 协议用于它们之间的 distcp：
+
+```bash
+% hadoop distcp webhdfs://namenode1:50070/foo webhdfs://namenode2:50070/foo
+```
+
+# 4 关于 YARN
+
+​	Apache YARN（Yet Another Resource Negotitor 的缩写）是 Hadoop 的集群资源管理系统。 YARN 被引入 Hadoop 2，最初是为了改善 MapReduce 的实现，但它具有足够的通用性，同样可以支持其他的分布式计算模式。
+
+![YARN应用](YARN应用.png)
+
+​	一些分布式计算框架（ MapReduce， Spark 等等 ）作为 YARN 应用运行在集群计算层（ YARN ）和集群存储层（ HDFS 和 Hbase ）上。
+
+​	还有一层应用是建立在图 4-1 所示的框架之上。如 Pig ， Hive 和 Crunch 都是运行在 MapReduce ， Spark 或 Tez （或三个都可）之上的处理框架，它们不和 YARN 直接打交道。
+
+## 4.1 剖析 YARN 应用运行机制
+
+​	YARN 通过两类长期运行的守护进程提供自己的核心服务：管理集群上资源使用的资源管理器、运行在集群中所有节点上且能够启动和监控容器的节点管理器。容器用于执行特定应用程序的进程，每个容器都有资源限制。一个容器可以是一个 Unix 进程，也可以是一个 Linux cgroup ， 取决于 YARN 的配置。
+
+![YARN应用的运行机制](YARN应用的运行机制.png)
+
+​	为了在 YARN 上运行一个应用，首先，客户端联系资源管理器，要求运行一个 application master 进程（图4-2中的步骤1）。然后，资源管理器找到一个能够在容器中启动 application master 的节点管理器（步骤2a和2b）。准确地说， application master 一旦运行起来后能够做什么取决于应用本身。有可能是在所处的容器中简单地运行一个计算，并将结果返回给客户端；或是向资源管理器请求更多的容器（步骤3）。以用于运行一个分布式计算（步骤4a和步骤4b）。后者是 MapReduce YARN 应用所做的事情。
+
+## 4.3 YARN 中的调度
+
+​	YARN 调度器的工作就是根据既定策略为应用分配资源。
+
+### 4.3.1 调度选项
+
+​	YARN 中有三种调度器可用：FIFO 调度器、容量调度器和公平调度器。
+
+​	在一个共享集群中，更适合使用容量调度器和公平调度器。这两种调度器都允许长时间运行的作业能及时完成，同时也允许正在进行较小临时查询的用户能够在合理时间内得到返回结果。
+
+![用FIFO调度器、容量调度器、和公平调度器运行大小作业时集群的利用率](各调度器运行大小作业时集群的利用率对比.png)
+
+​	使用容量调度器时，一个独立的专门队列保证小作业一提交就可以启动，由于队列容量是为那个队列的作业保留的，因此这种策略是以整个集群的利用率为代价的。这意味着与使用 FIFO 调度相比，大作业执行的时间要长。
+
+​	使用公平调度器时，不需要预留一定量的资源，因为调度器会在所有运行的作业之间动态平衡资源。第一个（大）作业启动时，它也是唯一运行的作业，因而获得集群中所有的资源。当第二个（小）作业启动时，它被分配到集群的一半资源，这样每个作业都能公平共享资源。
+
+​	从第二个作业的启动到获得公平共享资源之间会有时间滞后，因为它必须等待第一个作业使用的容器用完并释放出资源。当小作业结束且不再申请资源后，大作业将会去再次使用全部的集群资源。最终的效果是，既得到了较高的集群利用率，又能保证小作业能及时完成。
+
+### 4.3.3 公平调度器配置
+
+​	**4. 抢占**
+
+​	在一个繁忙的集群中，当作业被提交给一个空队列时，作业不会立即启动，直到集群上已经运行的作业释放了资源。作为使作业从提交到执行所需的时间可预测，公平调度器支持“抢占”功能。
+
+​	所谓抢占，就是允许调度器终止哪些占用资源超过了其公平共享份额的队列的容器，这些容器资源释放后可以分配给资源数量低于应得份额的队列。抢占会降低整个集群的效率，因为被终止的 containers 需要重新执行。
+
+​	通过将 yarn.scheduler.fair.preemption 设置为 true ，可以全面抵用抢占功能。有两个相关的抢占超时设置：一个用于最小共享（ minimum share preemption timout ），另一个用于公平共享（ fair share preemption timout ），两者设定时间均为秒级。默认情况下，两个超时均不设置。所以为了允许抢占容器，需要至少设置其中一个超时参数。
+
+​	如果队列在 minimum share preemption timout 指定的时间内未获得被承诺的最小共享资源，调度器就会抢占其他容器。可以通过分配文件中的顶层元素 defaultMinSharePreemptionTimout 为所有队列设置默认的超时时间，还可以通过设置每个队列的 minSharePreemptionTimeout 元素来为单个队列指定超时时间。
+
+​	类似，如果队列在  fair share preemption timout 指定的时间内获得的资源仍然低于其共享份额的一半，name调度器就会抢占其他容器。可以通过分配文件中的顶层元素 defaultFairSharePreemptionTimeout 为所有队列设置默认的超时时间，还可以通过设置每个队列的 fairSharePreemptionTimeout 元素来为单个对垒指定超时时间。通过设置 defaultFairSharePreemptionThreshold 和 fairSharePreemptionThreshold （针对每个队列）可以修改超时阈值，默认值是 0.5。
+
+### 4.3.5 延迟调度
+
+​	YARN 中的每个节点管理器周期性地（默认每秒一次）向资源管理器发送心跳请求。心跳中携带了节点管理器中正在运行的容器。新容器可用的资源等信息，这样对于一个计划运行一个容器的应用而言，每个心跳就是一个潜在的调度机会。
+
+​	当使用延迟调度时，调度器不会简单地使用它接收的第一个调度机会，而是等待设定的最大数目的调度机会发生，然后才放松本地性限制并接收下一个调度机会。
+
+​	对于容量调度器，可以通过设置 yarn.scheduler.capacity.node-locality-delay 来配置延迟调度。设置为正整数，表示调度器在放松节点限制、改为匹配同一机架上的其他节点前，准备错过的调度机会数量。
+
+​	公平调度器也使用调度机会的数量来决定延迟时间，尽管是使用集群规模的比例来表示这个值。例如将 yarn.scheduler.fair.locality.threshold.node 设置为0.5，表示调度器在接受同一机架中的其他节点之前，将一直等待直到集群中的一半节点都已经给过调度机会。相关属性 yarn.scheduler.fair.locality.threshold.rack ，表示在接受另一个机架替代所申请的机架之前需要等待的时间阈值。
+
+### 4.3.6 主导资源公平性
+
+​	YARN 中调度器观察每个用户的主导资源，并将其作为对集群资源使用的一个度量。这个方法称为“主导资源公平性”（ Dominant Resource Fairness ， DRF ）。
+
+​	假设一个总共有100个CPU和10TB的集群。应用 A 请求的每份容器资源为2个 CPU 和300 GB 内存，应用 B 请求的每份容器资源为6个 CPU 和100 GB 内存。 A 请求的资源在集群资源中占比分别为2%和3%，由于内存占比（3%）大于 CPU 占比（2%），所以内存是 A 的主导资源。同理， CPU 是 B 的主导资源。由于 B 申请的资源是 A 的两倍（ 6% vs 3% ），所以在公平调度下， B 将分到一半的容器数。
+
+​	默认情况下不使用 DRF ，因此在资源计算期间，只需要考虑内存，不必考虑 CPU 。对容器调度器进行配置后，可以使用 DRF ，将 capacity-scheduler.xml 文件中的 org.apache.hadoop.yarn.util.resource.DominantResourceCalculator 设为 yarn.scheduler.capacity.resource-calculator 即可。
+
+​	公平调度器若要使用 DRF ，通过将分配文件中的顶层元素 defaultQueueSchedulingPolicy 设置为 drf 即可。
+
+# 5 Hadoop 的 I/O 操作
+
+## 5.1 数据完整性
+
+​	尽管磁盘或网络上的每个 I/O 操作不太可能将错误引入自己正在读/写的数据中，但是如果系统中需要处理的数据量大到 Hadoop 的处理极限时，数据被损坏的概率还是很高的。
+
+​	检测数据是否损坏的常见措施是，在数据第一次引入系统时计算校验和并在数据通过一个不可靠的通道时再次计算校验和，这样就能发现数据是否损坏。校验和也是可能损坏的，不知是数据，但由于校验和比数据小得多，所以损坏的可能性非常小。
+
+### 5.1.1 HDFS 的数据完整性
+
+​	HDFS 会对写入的所有数据计算校验和，并在读取数据时验证校验和。它针对每个由 dfs.bytes-per-checksum 指定字节的数据计算校验和。默认情况下为 512 个字节，由于 CRC-32 校验和是4个字节，所以存储校验和的额外开销低于1%。
+
+### 5.1.2 LocalFileSystem
+
+​	Hadoop 的 LocalFileSystem 执行客户端的校验和验证。当写入一个名为 filename 的文件时，文件系统客户端会明确在包含每个文件块校验和的同一个目录内新建一个 .filename.crc 隐藏文件。文件块的大小由属性 file.bytes-per-checksum 控制，默认512个字节。文件块的大小作为元数据存储在 .crc 文件中，所以即使文件块大小的设置已经发生变化，仍然可以正确读回文件。在读取文件时需要验证校验和，并且如果检测到错误， LocalFileSystem 还会抛出一个 ChecksumException 异常。
+
+​	我们也可以禁用校验和计算，特别是在底层文件系统本身就支持校验和的时候。在这种情况下，使用 RawLocalFileSystem 替代 LocalFileSystem 。要想在一个应用中实现全局校验和验证，需要将 fs.file.impl 属性设置为 org.apache.hadoop.fs.RawLocalFileSystem 进而实现对文件 URI 的重新映射。
+
+### 5.1.3 ChecksumFileSystem
+
+​	ChecksumFileSystem 类有一些与校验和有关的有用方法，比如 getChecksumFile() 可以获取任意一个文件的校验和文件路径。
+
+​	如果 ChecksumFileSystem 类在读取文件时检测到错误，会调用自己的 reportChecksumFailure() 方法。默认实现为空方法，但 LocalFileSystem 类会将这个出错的文件及其校验和移到同一存储设备上一个名为 *bad_files* 的编辑文件夹中。管理员应该定期检查这些坏文件并采取相应的行动。
+
+## 5.2 压缩
+
+​	与 Hadoop 结合使用的常见压缩方法，都提供9个不同的选项来控制压缩时必须考虑的权衡；选项 -1 为优化压缩速度， -9 为优化压缩空间。例如，下述命令通过最快的压缩方法创建一个名为 file.gz 的压缩文件：
+
+``` bash
+%gzip -1 file
+```
+
+### 5.2.1 codec
+
+​	Codec 是压缩-解压缩算法的一种实现。在 Hadoop 中，一个对 CompressionCodec 接口实现代表一个 codec 。例如， GzipCodec 包装了 gzip 的压缩和解压缩算法。
+
+​	**1.通过 CompressionCodec 对数据流进行压缩和解压缩**
+
+​	CompressionCodec 包含两个函数，可以轻松用于压缩和解压缩数据。如果要对写入输出数据流的数据进行压缩，可以 createOutputStream （ OutputStream out ）方法在底层的数据流中对需要以压缩格式写入在此前上位压缩的数据新建一个 CompressionOutputStream 对象。相反，对输入数据流中读取的数据进行解压缩的时候，则调用 createInputStream （ InputStream in ）获取 CompressionInputStream ，可以通过该方法从底层数据流读取解压缩后的数据。
+
+​	**2.通过 CompressionCodecFactory 推断 CompressionCodec**
+
+​	CompressionCodecFactory 提供了 getCodec() 方法，可以将文件扩展名映射到一个 CompressionCodec 的方法，该方法取文件的 Path 对象作为参数。
+
+​	**3.原生类库**
+
+​	为了提高性能，最好使用“原生”类库来实现压缩和解压缩。
+
+​	**4.CodePool**
+
+​	如果使用的是原生代码库并且需要在应用中执行大量压缩和解压缩操作，可以考虑使用 CodecPool ，它支持反复使用压缩和解压缩，以分摊创建这些对象的开销。
+
+### 5.2.2 压缩和输入分片
+
+​	因为 gzip 不支持文件切分，无法实现从 gzip 压缩数据流的任意位置读取数据，所以无法让 map 任务独立于其他任务进行数据读取。
+
+​	在这种情况下， MapReduce 会采用正确的做法，它不会尝试切分 gzip 压缩文件。这牺牲了数据的本地性：一个 map 任务处理8个 HDFS 块，而其中大多数块并没有存贮在执行该 map 任务的节点上。而且， map 任务越少，作业的粒度就越大，因而运行的时间可能会更长。
+
+## 5.3 序列化
+
+### 5.3.1 Writable 接口
+
+​	Writable 接口定义了两个方法：一个将其状态写入 DataOutput 二进制流，另一个从 DataInput 二进制流读取状态。
+
+``` java
+public interface Writable {
+    void write(DataOutput var1) throws IOException;
+    void readFields(DataInput var1) throws IOException;
+}
+```
+
+### 5.3.2 Writable 类
+
+​	**1、 Java 基本类型的 Writable 封装器**
+
+​	Hadoop 自带的 org.apache.hadoop.io 包中有广泛的 Writable 类可供选择。
+
+​	Writable 类对所有 Java 基本类型提供封装， char 类型除外（可以存储在 IntWritable 中）。所有的封装包含 get() 和 set() 两个方法用于读取或存储封装的值。
+
+![Java 基本类型的 Writable 类.png](Java 基本类型的 Writable 类.png)
+
+​	**2、Text 类型**
+
+​	Text 类使用整型来存储字符串编码中所需的字节数，因此该最大值 2 GB。
+
+​	**索引**：对 Text 类的索引是根据编码后字节序列中的位置实现的，并非字符串中的 Unicode 字符，也不是  Java char 的编码单元（如 String）。对于 ASCII 字符串，这三个索引位置的概念是一致的。
+
+​	Text 类并不像 java.lang.String 类那样有丰富的字符串操作的 API 。在多数情况下，需要将 Text 对象转换成 String 对象。这一转换通常通过调用 toString() 方法实现。
+
+​	**3、BytesWritable**
+
+​	BytesWritable 是对二进制数据数组的封装。它的序列化格式为一个指定所含数据字节数的整数域（4字节），后跟数据内容本身。
+
+​	BytesWritable 类的 getBytes() 方法返回的字节数组长度（容量）可能无法体现 BytesWritable 所存储数据的实际大小。可以通过 getLength() 方法来确定的 BytesWritable 的大小。
+
+​	**4、NullWritable** 
+
+​	NullWritable 是 Writable 是特殊类型，它的序列化长度为0。它并不从数据流中读取数据，也不写入数据。它充当占位符；例如，在 MapReduce 中，如果不需要使用键或值得序列化地址，就可以将键或值声明为 NullWritable ，这样可以高效存储常量空值。如果希望存储一系列数值，与键-值对相对， NullWritable 也可以用作在 SequenceFile 中的键。它是一个不可变的单实例类型，通过调用 NullWritable.get() 方法可以获取这个实例。
+
+## 5.4 基于文件的数据结构
+
+### 5.4.1 关于 SequenceFile
+
+​	日志文件，其中每一行文本代表一条日志记录。纯稳步不适合记录二进制类型的数据。在这种情况下， Hadoop 的 SequenceFile 类非常合适，为二进制键-值对提供了一个持久数据结构。
+
+​	SequenceFiles 也可以作为小文件的容器。 HDFS 和 MapReduce 是针对大文件优化的，所以通过 Sequence 类型将小文件包装起来，可以获得更高效率的存储和处理。
+
+**1.通过命令行接口显示 SequenceFile**
+
+​	hadoop fs 命令有一个 -text 选项可以以文本形式显示顺序文件。该选项可以查看文件的代码，由此检测出文本的类型并将其转换成相应的文本。该选项可以识别 gzip 压缩文件、顺序文件和 Avro 数据文件；否则，便假设输入为纯文本文件。
+
+``` bash
+% hadoop fs -text numbers.seq | head
+```
+
+**3.SequenceFile 的格式**
+
+​	顺序文件由文件头和随后的一条或多条记录组成。顺序文件的前三个字节为 SEQ （顺序文件码），紧随其后的一个字节表示顺序文件的版本号。文件头还包括其他字段，例如键和值类的名称、数据压缩细节、用户定义的元数据以及同步标识。同步标识用于在读取文件时能够从任意位置开始识别记录边界。每个文件都有一个随机生成的同步标识，其值存储在文件头中。同步标识位于顺序文件中的记录与记录之间。同步标识的额外存储开销要求小于1%，所以没有必要再每条记录末尾添加该标识（特别是比较短的记录）。
+
+![压缩前和压缩后的顺序文件的内部结构](压缩前和压缩后的顺序文件的内部结构.png)
+
+​	块压缩（ block compression ）是指一次性压缩多条记录，因为它可以利用记录间的相似性进行压缩，所以相较于单条记录压缩方法，该方法的压缩效率更高。可以不断向数据块中压缩记录，直到块的字节数不小于 io
+
+.seqfile.compress.blocksize 属性中设置的字节数：默认为1 MB。每一个新块的开始处都需要插入同步标识。数据块的格式如下：首先是一个指示数据块中字节数的字段；紧接着是4个压缩字段（键长度、键、值长度和值）。
+
+![采用块压缩方式之后，顺序文件的内部结构](块压缩.png)
+
+### 5.4.2 关于 MapFile
+

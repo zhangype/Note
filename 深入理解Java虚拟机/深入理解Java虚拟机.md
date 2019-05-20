@@ -1,4 +1,4 @@
-#1 走进 java
+# 1 走进 java
 
 ## 1.2 java 技术体系
 
@@ -301,7 +301,7 @@ public class DirectMemoryOOM {
 
 ## 3.5 垃圾收集器
 
-![HotSpot 虚拟机的垃圾收集器](/resources/HotSpot 虚拟机的垃圾收集器.png)
+![HotSpot 虚拟机的垃圾收集器](resources/HotSpot%20虚拟机的垃圾收集器.png)
 
 ​	上图展示了7种作用于不同分代的收集器，如果两个收集器之间存在连线，就说明它们可以搭配使用。
 

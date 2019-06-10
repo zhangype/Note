@@ -1,4 +1,4 @@
-# 1 走进 java
+1 走进 java
 
 ## 1.2 java 技术体系
 
@@ -306,4 +306,106 @@ public class DirectMemoryOOM {
 ​	上图展示了7种作用于不同分代的收集器，如果两个收集器之间存在连线，就说明它们可以搭配使用。
 
 ### 3.5.1 Serial 收集器
+
+![SerialAndSerialOld收集器运行示意图](resources/SerialAndSerialOld收集器运行示意图.png)
+
+​	Serial 收集器是最基本、发展历史最悠久的收集器，曾经（在 JDK 1.3.1 之前）是虚拟机新生代收集的唯一选择。在它进行垃圾收集时，必须暂停其他所有的工作线程，直到它收集结束。
+
+### 3.5.2 ParNew 收集器
+
+![ParNewSerialOld收集器运行示意图](resources/ParNewSerialOld收集器运行示意图.png)
+
+​	ParNew 收集器其实就是 Serial 收集器的多线程版本，除了使用多条线程进行垃圾收集之外，其余行为包括 Serial 收集器可用的所有控制参数（例如： -XX:SurvivorRatio 、-XX:PretenureSizeThreshold 、 -XX:HandlePromotionFailure 等）、收集算法、 Stop The World 、对象分配规则、回收策略等都与 Serial 收集器完全一样。
+
+​	它是许多运行在 Server 模式下的虚拟机中首选的新生代收集器，其中一个与性能无关的重要原因是，除了 Serial 收集器外，目前只有它能与 CMS （ Concurrent Mark Sweep ）收集器配合工作。
+
+​	ParNew 收集器在单 CPU 的环境中绝对不会有比 Serial 收集器更好的效果，甚至优于存在线程交互的开销，该收集器在通过超线程技术实现的两个 CPU 的环境中都不能百分之百地保证可以超越 Serial 收集器。随着可以使用的 CPU 的数量的增加，它对于 GC时系统资源的有效利用还是很有好处的。它默认开启的收集线程数与 CPU 的数量相同，在 CPU 非常多的环境下，可以使用 -XX:ParallelGCThreads 参数来限制垃圾收集的线程数。
+
+>在垃圾收集器的上下文语境中，将并发和并行，做专门解释。
+>
+>- 并行（ Parallel ）：指多条垃圾收集线程并行工作，但此时用户线程仍然处于等待状态。
+>- 并发（ Concurrent ）：指用户线程与垃圾收集线程同时执行（但不一定是并行的，可能会交替执行），用户程序在继续执行，而垃圾收集程序运行在另一个 CPU 上。
+
+### 3.5.3 Parallel Scavenge 收集器
+
+​	Parallel Scavenage 收集器的目标是达到一个可控制的吞吐量。所谓吞吐量就是 CPU 用于运行客户代码的时间与 CPU 总消耗时间的比值，即吞吐量=运行用户代码时间/（运行用户代码时间+垃圾收集时间）。
+
+​	停顿时间越短就越适合需要与用户交互的程序，良好的响应速度能提升用户体验，而高吞吐量则可以高效率地利用 CPU 时间，尽快完成程序的运算任务，主要适合在后台运算而不需要太多交互的任务。
+
+​	Parallel Scavenage 收集器提供了两个参数用于精确控制吞吐量，分别是控制最大垃圾收集停顿时间的 -XX:MaxGCPauseMillis 参数以及直接设置吞吐量大小的 -XX:GCTimeRatio 参数。
+
+​	MaxGCPauseMillis 参数允许的值是一个大于0的毫秒数，收集器将尽可能地保证内存回收花费的时间不超过设定值。不要以为如果把这个参数设置得稍小一点就能使得系统的垃圾收集速度变得更快， GC 停顿时间缩短是以牺牲吞吐量和新生代空间来换取的。
+
+​	 -XX:GCTimeRatio 参数的值应当是一个大于0且小于100的整数，也就是垃圾收集时间占总时间的比率，相当于是吞吐量的倒数。如果把此参数设置为19，那允许的最大 GC 时间就占总时间的5%（即1/(1+19)），默认值为99，就是允许最大1%（即1/（1+99））的垃圾收集时间。
+
+​	Parallel Scavenage 收集器也经常称为“吞吐量优先”收集器。Parallel Scavenage 收集器还有一个参数 -XX:UseAdaptiveSizePolicy ，这是一个开关参数，当这个参数打开之后，就不需要手工指定新生代的大小（ -Xmn ）、 Eden 与 Survivor 区的比例（ -XX:SurvivorRatio ）、晋升老年代对象年龄（ -XX:PretenureSizeThreshold ）等细节参数了，虚拟机会根据当前系统的运行情况收集性能监控信息，动态调整这些参数以提供最合适的停顿时间或者最大的吞吐量，这种调节方式称为 GC 自适应的调节策略。自适应调节策略也是 Parallel Scavenge 收集器与 ParNew 收集器的一个重要区别。
+
+### 3.5.4 Serial Old 收集器
+
+​	Serial Old 收集器是 Serial 收集器的老年代版本，同样是一个单线程收集器，使用“标记-整理”算法。这个收集器的主要意思也是在于给 Client 模式下的虚拟机使用。如果在 Server 模式下，那么它主要还有两大用途：一种用途是在 JDK 1.5 以及以前的版本中与 Parallel Scavenage 收集器搭配使用，另一种用途就是作为 CMS 收集器的后备预案，在并发收集发生 Concurrent Mode Failure 时使用。
+
+### 3.5.5 Parallel Old 收集器
+
+​	Parallel Old 是 Parallel Scavenge 收集器的老年代版本，使用多线程和“标记-整理”算法。在注重吞吐量以及 CPU 资源敏感的场合，都可以优先考虑 Parallel Scavenage 加 Parallel Old 收集器。
+
+![ParallelScavengeParallelOld收集器运行示意图](resources/ParallelScavengeParallelOld收集器运行示意图.png)
+
+### 3.5.6 CMS 收集器
+
+​	CMS（ Concurrent Mark Sweep ）收集器是以一种获取最短回收停顿时间为目标的收集器。
+
+​	CMS 收集器是基于“标记——清除”算法实现的，整个过程分为4个步骤：
+
+- 初始标记（ CMS initial mark ）
+
+- 并发标记（ CMS concurrent mark ）
+
+- 重新标记（ CMS remark ）
+
+- 并发清除（ CMS concurrent sweep ）
+
+  初始标记、重新标记这两个步骤需要“ Stop The World ”。初始标记仅仅只是标记一下 GC Roots 能直接关联到的对象，速度很快，并发标记阶段就是进行 GC Roots Tracing 的过程，而重新标记阶段则是为了修正并发标记期间因用户程序继续运作而导致标记产生变动的那一部分对象的标记记录，这个阶段的停顿时间会比初始标记阶段稍长一些，但远比并发标记时间短。
+
+![CMS收集器运行示意图](resources/CMS收集器运行示意图.png)
+
+​	CMS 有以下3个明显的缺点：
+
+- CMS 收集器对 CPU 资源非常敏感。 CMS 默认启动的回收线程数是（ CPU 数量+3）/4，也就是当 CPU 在4个以上时，并发回收时垃圾收集线程不少于25%的 CPU 资源，并且随着 CPU 数量的增加而下降。
+- CMS 无法处理浮动垃圾，可能出现“ Concurrent Mode Failure ”失败而导致另一次 Full GC 产生。由于 CMS 并发清理阶段用户线程还在运行着，伴随程序运行自然就还会有新的垃圾不断产生，着一部分垃圾出现在标记过程之后， CMS 无法再档次收集中处理掉它们，只要等待下一次 FC 时再清理掉。这一部分垃圾就称为“浮动垃圾”。 CMS 收集器需要预留一部分空间提供并发收集时的程序运作使用。在 JDK 1.5 的默认设置下， CMS 收集器当老年代使用了 68% 的空间后就会被激活，这是一个偏保守的设置，如果在应用中老年代增长不是很快，可以适当调高参数 -XX:CMSInitiatingOccupancyFraction 的值来提高触发百分比，以便降低内存回收次数从而获取更好的性能，在 JDK 1.6 中， CMS 收集器的启动阈值已经提升至92%。要是 CMS 运行期间预留的内存无法满足程序需要，就会出现一次“ Concurrent Mode Failure ”失败，这时虚拟机将启动后备预案：临时启用 Serial Old 收集器来重新进行老年代的垃圾收集，这样停顿时间就很长了。所以说参数 -XX:CMSInitiatingOccupancyFraction 设置得太高很容易导致大量“ Concurrent Mode Failure ”失败，性能反而降低。
+- 收集结束时，会有大量空间碎片产生。 CMS 收集器提供了一个 -XX:+UseCMSCompactAtFullCollection 开关参数（默认是开启的），用于在 CMS 收集器顶不住要进行 FullGC 时开启内存碎片的合并整理过程，内存整理的过程是无法并发的，空间碎片问题没有了，但停顿时间不得不变长。虚拟机设计者还提供了另外一个参数 -XX:CMSFullGCsBeforeCompaction ，这个参数用于设置执行多少次不压缩的 Full GC 后，跟着来一次带压缩的（默认值为0，表示每次进入 Full GC 时都进行碎片整理）
+
+### 3.5.7 G1 收集器
+
+​	G1 特点：
+
+- 并行与并发
+- 分代收集
+- 空间整合
+- 可预测的停顿：能让使用者明确再也一个长度为 M 毫秒的时间片段内，消耗在垃圾收集上的时间不得超过 N 毫秒。
+
+​	G1 收集器将整个 Java 堆划分为多个大小相等的独立区域（ Region ），虽然还保留有新生代和老年代的概念，但新生代和老年代不再是物理隔离的了，它们都是一部分 Region （不需要连续）的集合。
+
+​	G1 收集器之所以能建立可预测的停顿时间模型，是因为它可以有计划地避免在整个 Java 堆中进行安全区域的垃圾收集。G1 跟踪各个 Region 里面的垃圾堆积的价值大小（回收所获得的空间大小以及回收所需时间的经验值），在后台维护一个优先列表，每次根据允许的收集时间，优先回收价值最大的 Region 。这种使用 Region 划分内存空间以及优先级的区域回收方式，保证了 G1 收集器在有限的时间内可以获取尽可能高的收集效率。
+
+​	在 G1 收集器中， Region 之间的对象引用以及其他收集器中的新生代与老年代之间的对象引用，虚拟机都是使用 Remembered Set 来避免全堆扫描的。 G1 中每个 Region 都有一个与之对应的 Remembered Set ，虚拟机发现程序在对 Reference 类型的数据进行写操作时，会产生一个 Writer Barrier 暂时中断写操作，检查 Reference 引用对象是否处于不同的 Region 之中，如果是，便通过 CardTable 把相关引用信息记录到被引用对象所属的 Region 的 Remembered Set 之中。当进行内存回收时，在 GC 根节点的枚举范围中加入 Remembered Set 即可保证不对全堆扫描也不会有遗漏。
+
+​	如果不计算维护 Remembered Set 的操作， G1 收集器的运作大致可划分为以下几个步骤：
+
+- 初始标记（ Initial Marking）
+
+- 并发标记（ Concurrent Marking ）
+
+- 最终标记（ Fianl Marking ）
+
+- 筛选回收（ Live Data Counting and Evacuation ）
+
+​	初始标记阶段仅仅只是标记一下 GC Roots 能直接关联到的对象，并且修改 TAMS （ Next Top at Mark Start ）的值，让下一阶段用户程序并发运行时，能在正确可用的 Region 中创建新对象，这个阶段需要停顿线程，但耗时很短。
+
+​	并发标记阶段是从 GC Root 开始对堆对象进行可达性分析，找出存活的对象，这阶段耗时较长，但可与用户程序并发执行。
+
+​	最终标记阶段则是为了修正在并发标记期间因用户陈旭继续运作而导致标记产生变动的那一部分标记记录，虚拟机将这段时间对象变化记录在线程 Remembered Set Logs 里面，最终标记阶段需要把 Remembered Set Logs 的数据合并到 Remembered Set 中，这个阶段需要停顿线程，但是可并行执行。
+
+​	筛选回收阶段首先对各个 Region 的回收价值和成本进行排序，根据用户所期望的 GC 停顿时间来制定回收计划。
+
+![G1收集器运行示意图.png](resources/G1收集器运行示意图.png)
 

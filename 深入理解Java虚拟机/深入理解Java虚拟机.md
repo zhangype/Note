@@ -1,4 +1,4 @@
-#1 走进 java
+# 1 走进 java
 
 ## 1.2 java 技术体系
 
@@ -408,4 +408,80 @@ public class DirectMemoryOOM {
 ​	筛选回收阶段首先对各个 Region 的回收价值和成本进行排序，根据用户所期望的 GC 停顿时间来制定回收计划。
 
 ![G1收集器运行示意图.png](resources/G1收集器运行示意图.png)
+
+### 3.5.8 理解 GC 日志
+
+​	每个收集器的日志格式可以不一样。但虚拟机设计者为了方便用户阅读，将各个收集器的日志都维持一定的共性，例如以下两段典型的 GC 日志：
+
+> 33.125：[ GC [ DefNew : 3324k->152k(3712k), 0.0025925 secs ] 3324k->152k(11904K),0.0031680 secs ]
+>
+> 100.667：\[ Full GC [ Tenured：0K-＞210K(10240K)，0.0149142 secs ] 4603K-＞ 210K(19456K)，\[ Perm：2999K-＞2999K(21248K)]，0.0150007 secs][Times：user=0.01 sys=0.00，real=0.02 secs]
+
+​	最前面的数字“33.125：”和“100.667：”代表了GC发生的时间，这个数字的含义是从Java虚拟机启动以来经过的秒数。
+
+​	GC 日志开头的“[GC”和“[Full GC”说明了这次垃圾收集的停顿类型。如果有“Full”，说明这次 GC 是发生了 Stop-The-World 的，例如下面这段新生代收集器 ParNew 的日志也会出现“[Full GC”（这一般是因为出现了分配担保失败之类的问题，所以才导致 STW ）。如果是调用 System.gc() 方法所触发的收集，那么在这里将显示“[ Full GC ( System )”。
+
+> [Full GC 283.736：[ParNew：261599K-＞261599K（261952K），0.0000288 secs]
+
+​	接下来的“[DefNew”、“[Tenured”、“[Perm”表示GC发生的区域，这里显示的区域名称与使用的GC收集是密切相关的，例如上面样例所使用的Serial收集器中的新生代名为“Default New Generation”，所以显示的是“[DefNew”。
+
+​	后面方括号内部的“3324K-＞152K（3712K）”含义是“GC前该内存区域已使用容量-＞GC后该内存区域已使用容量（该内存区域总容量）”。 
+而在方括号之外的“3324K-＞152K（11904K）”表示“GC前Java堆已使用容量-＞GC后Java堆已使用容量（Java堆总容量）”。
+
+​	再往后，“0.0025925 secs”表示该内存区域GC所占用的时间，单位是秒。
+
+​	有的收集器会给出更具体的时间数据，如“[Times：user=0.01 sys=0.00，real=0.02 secs]”，这里面的 user 、 sys 和 real 与 Linux 的 time 命令所输出的时间含义一致，分别代表用户态消耗的 CPU 时间、内核态消耗的 CPU 事件和操作从开始到结束所经过的墙钟时间（ Wall Clock Time ）。
+
+​	CPU时间与墙钟时间的区别是，墙钟时间包括各种非运算的等待耗时，例如等待磁盘 I/O 、等待线程阻塞，而 CPU 时间不包括这些耗时，但当系统有多 CPU 或者多核的话，多线程操作会叠加这些 CPU 时间，所以 user 或 sys 时间超过 real 时间是完全正常的。
+
+| 参　　数                                                     | 描　　述                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| UseSerialGC                                                  | 虚拟机运行在 Client 模式下的默认值，打开此开关后，使用 Serial + Serial Old 的收集器组合进行内存回收 |
+| UseParNewGC                                                  | 打开此开关后，使用 ParNew + Serial Old 的收集器组合进行内存回收 |
+| UseConcMarkSweepGC                                           | 打开此开关后，使用 ParNew + CMS + Serial Old 的收集器组合进行内存回收。 Serial Old 收集器将作为 CMS 收集器出现 Concurrent Mode Failure 失败后的后备收集器使用 |                                                              |
+| UseParallelGC                                                | 虚拟机运行在 Server 模式下的默认值，打开此开关后，使用 Parallel Scavenge + Serial Old（PS MarkSweep）的收集器组合进行内存回收 |
+| UseParallelOldGC                                             | 打开此开关后，使用 Parallel Scavenge + Parallel Old 的收集器组合进行内存回收 |
+| SurvivorRatio                                                | 新生代中 Eden 区域与 Survivor 区域的容量比值， 默认为8， 代表 Eden ：Survivor =8∶1 |
+| PretenureSizeThreshold                                       | 直接晋升到老年代的对象大小，设置这个参数后，大于这个参数的对象将直接在老年代分配 |
+| MaxTenuringThreshold                                         | 晋升到老年代的对象年龄。每个对象在坚持过一次 Minor GC 之后，年龄就加1，当超过这个参数值时就进入老年代 |
+| UseAdaptiveSizePolicy                                        | 动态调整 Java 堆中各个区域的大小以及进入老年代的年龄         |
+| HandlePromotionFailure                                       | 是否允许分配担保失败，即老年代的剩余空间不足以应付新生代的整个 Eden 和 Survivor 区的所有对象都存活的极端情况 |
+| ParallelGCThreads                                            | 设置并行 GC 时进行内存回收的线程数                           |
+| GCTimeRatio                                                  | GC 时间占总时间的比率，默认值为99，即允许1% 的 GC 时间。仅在使用 Parallel Scavenge 收集器时生效 |
+| MaxGCPauseMillis                                             | 设置 GC 的最大停顿时间。仅在使用 Parallel Scavenge 收集器时生效 |
+| CMSInitiatingOccupancyFraction                               | 设置 CMS 收集器在老年代空间被使用多少后触发垃圾收集。默认值为68%，仅在使用 CMS 收集器时生效 |
+|UseCMSCompactAtFullCollection|设置 CMS 收集器在完成垃圾收集后是否要进行一次内存碎片整理。仅在使用 CMS 收集器时生效|
+|CMSFullGCsBeforeCompaction|设置 CMS 收集器在进行若干次垃圾收集后再启动一次内存碎片整理。仅在使用 CMS 收集器时生效|
+
+## 3.6 内存分配与回收策略
+
+​	对象主要分配在新生代的 Eden 区上，如果启动了本地线程分配缓冲，将按线程优先在 TLAB 上分配。少数情况下也可能会直接分配在老年代中，分配的规则并不是百分之百固定的，其细节取决于当前使用的哪一种垃圾收集器组合，还有虚拟机中与内存相关的参数的设置。
+
+### 3.6.1 对象优先在 Eden 分配
+
+​	大多数情况下，对象在新生代 Eden 区中分配。当 Eden 区没有足够空间进行分配时，虚拟机将发起一次 Minor  GC 。
+
+> - 新生代 GC （ Minor GC ）：指发生在新生代的垃圾收集动作，因为 Java 对象大多都具备朝生夕灭的特性，所以 Minor GC 非常频繁，一般回收速度也比较块。
+>
+> - 老年代 GC （ Major GC / Full GC ）：指发生在老年代的 GC ，出现了 Major GC ，经常会伴随至少一次的 Minor GC （但非绝对的，在 Parallel Scavenge 收集器的收集策略里就直接进行 Major GC 的策略选择过程）。 Major GC 的速度一般会比 Minor GC 慢 10 倍以上。
+
+### 3.6.2 大对象直接进入老年代
+
+​	所谓的大对象是指，需要大量连续内存空间的 Java 对象，最典型的大对象就是那种很长的字符串以及数组。虚拟机提供了一个 -XX:PretenureSizeThreshold 参数，令大于这个设置值得对象直接在老年代分配。避免在 Eden 区以及两个 Survivor 区之间发生大量的内存复制。
+
+> PretenureSizeThreshold 参数只针对 Serial 和 ParNew 两款收集器有效， Parallel Scavenge 收集器不认识这个参数， Parallel Scavenge 收集器一般并不需要设置。如果遇到必须使用此参数的场合，可以考虑 ParNew 和 CMS 的收集器组合。
+
+### 3.6.3 长期存活的对象将进入老年代
+
+​	虚拟机采用了分代收集的思想管理内存。虚拟机给每个对象定义了一个对象年龄计数器。如果对象在 Eden 出生并经过第一次 Minor GC 后仍然存活，并且能被 Survivor 容纳的haul，将被移动到 Survivor 空间中，并且对象年龄设为1。对象在 Survivor 区中每“熬过”一次 Minor GC ，年龄就增加 1 岁，当它的年龄增加到一定程度（默认为15岁），就会被晋升到老年代中。对象晋升老年代的年龄阈值，可以通过参数 -XX:MaxTenuringThreshold 设置。
+
+### 3.6.4 动态对象年龄判定
+
+​	为了更好地适应不同程序的内存状况，虚拟机并不是永远地要求对象的年龄必须达到 MaxTenuringThreshold 才能晋升老年代，如果在 Survivor 空间中相同年龄所有对象大小的总和大于 Survivor 空间的一半，年龄大于或等于该年龄的对象就可以直接进入老年代，无须等到 MaxTenuringThreshold 中要求的年龄。
+
+### 3.6.5 空间分配担保
+
+​	在发生 Minor GC 之前，虚拟机会先检查老年代最大可用的连续空间是否大于新生代所有对象空间，如果这个条件成立，那么 Minor GC 可以确保是安全的。如果不成立，则虚拟机会查看 HandlePromotionFailure 设置是否允许担保失败。如果允许，那么会继续检查老年代最大可用的连续空间是否大于历次晋升到老年代对象的平均大小，如果大于，将尝试这进行一次 Minor GC ，尽管这次 Minor GC 是有风险的；如果小于，或者 HandlePromotionFailure 设置不允许冒险，那这时也要改为进行一次 Full GC 。
+
+​	在 JDK 6 Update 24 之后， HandlePromotionFailure 参数不会影响到虚拟机的空间分配担保策略，虽然源码中还定义了 HandlePromotionFailure 参数，但是在代码中已经不会再使用它。 JDK 6 Update 24 之后的规则变为只要老年代的连续空间大于新生代对象总大小或者历次晋升的平均大小就会进行 Minor GC ，否则将进行 Full GC 。
 

@@ -485,3 +485,161 @@ public class DirectMemoryOOM {
 
 ​	在 JDK 6 Update 24 之后， HandlePromotionFailure 参数不会影响到虚拟机的空间分配担保策略，虽然源码中还定义了 HandlePromotionFailure 参数，但是在代码中已经不会再使用它。 JDK 6 Update 24 之后的规则变为只要老年代的连续空间大于新生代对象总大小或者历次晋升的平均大小就会进行 Minor GC ，否则将进行 Full GC 。
 
+# 4 虚拟机性能监控与故障处理工具
+
+## 4.2 JDK 的命令行工具
+
+|名称	|主要作用|
+| ----- | ----- |
+|jps	|JVM Process Status Tool ，显示指定系统内所有的 HotSpot 虚拟机进程|
+|jstat	|JVM statistics Monitoring Tool ，用于收集 HotSpot 虚拟机各方面的运行数据|
+|jinfo	|Configuration Info for Java ，显示虚拟机配置信息|
+|jmap	|Memory Map for Java ，生成虚拟机的内存转储快照（ heapdump 文件）|
+|jhat	|JVM Heap Dump Brower ，用于分析 heapdump 文件，它会建立一个 HTTP/HTML 服务器，让用户可以在浏览器上查看分析结果|
+|jstack	|Stack Trace for Java ，显示虚拟机的线程快照|
+
+### 4.2.1 jps：虚拟机进程状况工具
+
+​	JDK 的很多小工具的名字都参考了 UNIX 命令的命名方式， jps 可以列出正在运行的虚拟机进程，并显示虚拟机执行主类名称以及这些进程的本地虚拟机唯一 ID （ Local Virtual Machine Identifier , LVMID ）。对于本地虚拟机进程来说， LVMID 与操作系统的进程 ID （ Process Identifier ， PID ）是一致的，但如果同时启动了多个虚拟机进程，无法根据进程名称定位时，那就只能依赖 jps 命令显示主类的功能才能区分了。
+
+​	jps 命令格式：
+
+``` bash
+jps [ options ] [ hostid ]
+```
+
+|属性 	|作用|
+| ----- | ----- |
+|-q 	|只输出 LVMID ，省略主类的名称|
+|-m 	|输出虚拟机进程启动时传递给主类 main ()函数的参数|
+|-l 	|输出主类的全名，如果进程执行的是jar包，输出jar路径|
+|-v 	|输出虚拟机进程启动时 jvm 参数|
+
+### 4.2.2 jstat： 虚拟机统计信息监控工具
+
+​	jstat 是用于监视虚拟机各种运行状态信息的命令行工具。它可以显示本地或者远程虚拟机进程中的类装载、内存、垃圾收集、 JIT 编译等运行数据。
+
+``` bash
+jstat [option vmid [interval [s|ms] [count]] ]
+```
+
+​	如果是本地虚拟机进程， VMID 和 LVMID 是一致的，如果是远程虚拟机，那 VMID 的格式应当是：
+
+　　[protocol:] [//] lvmid[@hostname[:port]/servername]
+
+​	参数 interval 和 count 分别表示查询的间隔和次数，如果省略这两个参数，说明只查询一次。例如需要每250毫秒查询一次进程2764垃圾收集状况，一共查询20次：
+
+``` bash
+jstat -gc 2764 250 20
+```
+
+​	选项 option 代表着用户希望查询的虚拟机信息，主要分为3类：类装载、垃圾收集、运行期编译状况。
+
+|选项|作用|
+| ----- | ----- |
+|-class|监视装载类、卸载类、总空间以及类装载所耗费的时间|
+|-gc|监视 Java 堆状况，包括 Eden 区、两个 survivor 区、老年代、永久代等的容量、已用空间、 GC 时间合计信息|
+|-gccapacity|监视内容与 -gc 基本相同，但输出主要关注 Java 堆各个区域使用到最大、最小空间|
+|-gcutil|监视内容与 -gc 基本相同，但输出主要关注已使用控件占总空间的百分比|
+|-gccause|与 -gcutil 功能一样，但是会额外输出导致上一次 gc 产生的原因|
+|-gcnew|监视新生代GC情况|
+|-gcnewcapacity|监视内容与 -gcnew 基本相同，输出主要关注使用到的最大、最小空间|
+|-gcold|监视老年代GC情况|
+|-gcoldcapacity|监视内容与 -gcold 基本相同，输出主要关注使用到的最大、最小空间|
+|-gcpermcapacity|输出永久代使用到的最大、最小空间|
+|-compiler|输出 JIT 编译过的方法、耗时等信息|
+|-printcompilation|输出已经被 JIT 编译过的方法|
+
+### 4.2.3 jinfo ： Java 配置信息工具
+
+​	jinfo 的作用是实时地查看和调整虚拟机各项参数。使用 jps 命令的 -v 参数可以查看虚拟机启动时显示指定的参数列表，但如果想知道未被显式指定的参数的系统默认值，除了去找资料以外，就得使用 jinfo 的 -flag 选项。 jinfo 还可以使用 -sysprops 选项吧虚拟机进程的 System.getProperties() 的内容打印出来。 JDK 1.6 之后，加入了运行期间修改参数的能力，可以使用 -flag [+|-] name 或者 -flag name=value 修改一部分运行期可写的虚拟机参数值。 JDK 1.6中， jinfo 对于 Windows 平台功能任由较大限制，只提供了最基本的 -flag 选项。
+
+​	jinfo 命令格式：
+
+``` bash
+jinfo [option] pid
+```
+
+​	例如查询 CMSInitiatingOccupancyFraction 参数值：
+
+``` bash
+jinfo -flag CMSInitiatingOccupancyFraction 1444
+```
+
+### 4.2.4 jmap： Java 内存映像工具
+
+​	jmap 的作用并不仅仅是为了获取 dump 文件，它还可以查询 finalize 执行队列、 Java 堆和永生代的详细信息，如空间使用率、当前用的哪种收集器等。
+
+​	jmap 在 Windows 下也受到比较大的限制。除了生成 dump 文件的 -dump 选项和用于查看每个类的实例、控件占用统计的 -histo 选项在所有操作系用都提供之外，其余选项只能在 Linux/Solaris 下使用。
+
+​	jmap 命令格式：
+
+> jmap [option] vmid
+
+|选项	|作用|
+| ----- | ----- |
+|-dump	|生成 Java 堆转储快照。格式为： -dump:[live,]format=b,file=\<filename>，其中 live 子参数说明是否只 dump 出存活的对象|
+|-finalizerinfo	|显示在 F-Queue 中等待 Finalizer 线程执行 finalize 方法的对象。只在 Linux/Solaris 平台下有效|
+|-heap	|显示 Java 堆详细信息，如使用哪种收集器、参数配置、分代情况等，在 Linux/Solaris 平台下有效|
+|-jisto	|显示堆中对象统计信息，包含类、实例对象、合集容量|
+|-permstat	|以 ClassLoader 为统计口径显示永久代内存状态。只在Linux/Solaris平台下有效|
+|-F	|当虚拟机进程对 -dump 选项没有相应时。可使用这个选项强制生成 dump 快照。只在 Linux/Solaris 平台下有效|
+
+### 4.2.6 jstack： Java 堆栈跟踪工具
+
+​	jstack 命令用于生成虚拟机当前时刻的线程快照（一般称为 threaddump 或者 javacore 文件）。线程快照就是当前虚拟机内每一条线程正在执行的方法堆栈的集合，生成线程快照的主要目的是定位线程长时间停顿的原因，如线程死锁、死循环、请求外部资源导致的长时间等待都是导致线程长时间停顿的常见原因。
+
+​	jstack 命令格式：
+
+​	jstack [option] vmid
+
+　option 选项的合法值和具体含义
+
+|选项	|作用|
+| ----- | ----- |
+|-F	|当正常输出的请求不被响应时，强制输出线程堆栈|
+|-l	|除堆栈外，显示关于锁的附加信息|
+|-m	|如果调用到本地方法的话，可以显示c/c++的堆栈|
+
+### 4.3.2 VisualVM：多合一故障工具处理
+
+**4、BTrace 动态日志跟踪**
+
+​	BTrace 是一个 VisualVM 插件，本身也是可以独立运行的程序。它的作用是在不停止目标程序运行的前提下，通过 HotSpot 虚拟机的 HotSwap 技术动态加入原本并不存在的调试代码。
+
+​	打印调用堆栈、参数、返回值只是 BTrace 的最基本的应用， BTrace 还可以进行性能监视、定位连接泄漏和内存泄漏、解决多线程竞争问题等。
+
+# 5 调优案例分析与实战
+
+### 5.2.1 高性能硬件上的程序部署策略
+
+​	计划使用 64 位 JDK 来管理大内存时，需要考虑下面可能面临的问题：
+
+- 内存回收导致的长时间停顿。
+- 现阶段，64 位 JDK 的性能测试结果普遍低于 32 位 JDK 。
+- 需要保证程序足够稳定，因为这种应用要是产生堆溢出几乎就无法产生堆转储快照（因为要产生十几 GB 乃至更大的 Dump 文件），哪怕产生了快照也几乎无法分析。
+- 相同程序在 64 位 JDK 消耗的内存一般比 32 位 JDK 大，这是由于指针膨胀，以及数据类型对齐补白等因素导致的。
+
+​	计划使用逻辑集群的方式来部署程序时，需要考虑下面可能面临的问题：
+
+- 尽量避免节点竞争全局的资源，最典型的就是磁盘竞争，各个节点如果同时访问某个磁盘文件的话（尤其是并发写操作容易出现问题），很容易导致 IO 异常。
+- 很难高效率地利用某些资源池，譬如连接池，一般都是在各个节点建立自己独立的连接池，这样可能导致一些节点池满了而另外一些节点仍有较多空余。尽管可以使用集中式的 JNDI ，但这个有一定的复杂性并且可能带来额外的性能开销。
+- 大量使用本地缓存（如使用大量 HashMap 作为 K/V 缓存）的应用，在逻辑集群中会造成较大的内存浪费，因为每个逻辑节点都会有一份缓存，这时候可以考虑把本地缓存改为集中式缓存。
+
+### 5.2.3 堆外内存导致的溢出错误
+
+​	从实践经验的角度出发，除了 Java 堆和永久代之外，应该注意到下面这些区域还会占用较多的内存，这里所有的内存总和受到操作系统进程最大内存的限制。
+
+- Direct Memory ： 可通过 -XX:MaxDirectMemorySize 调整大小，内存不足时抛出 OutOfMemoryError 或者 OutOfMemoryError： Direct buffer memory 。
+- 线程堆栈：可以通过 -Xss 调整大小，内存不足时抛出 StackOverflowError （纵向无法分配，即无法分配新的栈帧）或者 OutOfMemoryError: unable to create new native thread (（横向无法分配，即无法建立新的线程）。
+- Socket 缓存区：每个 Socket 连接都 Receive 和 Send 两个缓存区，分别占大约 37 KB 和25 KB 内存，连接多的话这块内存占用也比较乐观。如果无法分配，则可能会抛出 IOException: Too many open files 异常。
+- JNI 代码：如果代码中使用 JNI 调用本地库，那本地库使用的内存也不在堆中。
+- 虚拟机和 GC ：虚拟机、 GC 的代码执行也要消耗一定的内存。
+
+### 5.2.4 外部命令导致系统缓慢
+
+​	在 Java 虚拟机中通过 Java 的 Runtime.getRuntime().exec() 方法来调用执行外部执行，是非常消耗资源的操作。即使外部命令本身能很快执行完毕，频繁调用时，创建进程的开销也非常可观。 Java 虚拟机执行这个命令的过程是：首先克隆一个和当前虚拟机拥有一样环境变量的进程，再用这个新的进程去执行外部命令，最后再退出这个进程。如果频繁执行这个操作，系统的消耗会很大，不仅是 CPU ，内存负担也很重。
+
+### 5.2.6 不恰当数据结构导致内存占用过大
+
+​	例如，在 HashMap<Long, Long> 结构中，只有 Key 和 Value 所存放的两个长整型数据时有效数据，共 16B （2×8B）。这两个长整型数据包装成 Java.lang.Long 对象之后，就分别具有 8B 的 MarkWord 、8B 的 Klass 指针，再加上 8B 存储数据的 long 值。在这两个 Long 对象组成 Map.Entry 之后，又多了 16B 的对象头，然后一个 8B 的 next 字段和 4B 的 int 类型的 hash 字段，为了对齐，还必须添加 4B 的空白填充，最后还有一个 HashMap 中对这个 Entry 的 8B 的引用，这样增加两个长整型数字，实际消耗的内存为 (Long（24B）×2)+Entry（32B）+HashMap Ref （8B）= 88B ，空间效率为 16B/88B = 18%。

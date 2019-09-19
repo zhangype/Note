@@ -785,7 +785,7 @@ public class Simple {
 7. 属性长度中的值为0x0002，由于此属性表是 ConstantValue 类型，它的值固定为2；
 8. 常量值索引中的值为0x0008，指向了常量池中的第8项。为 CONSTANT_String_info 类型的项，表示“This is a test” 的常量。在对此 field 赋值时，会使用此常量对 field 赋值。
 
-	### 6.3.6 方法集合
+### 6.3.6 方法集合
 
 ​	Class 文件存储格式中对方法的描述与对字段的描述几乎采用了完全一致的方式，方法的表结构如同字段表一样。
 
@@ -818,3 +818,248 @@ public static synchronized final void greeting() {}
 > 类型构造器（静态构造器，类构造器）：用来设置类型的初始状态。类型默认没有定义类型构造器，如果定义，也只能定义一个。此外，类型构造器没有参数。类型构造器的定义类似于无参的实例构造器，区别在于必须将其标记为static。此外，类型构造器总是私有的。
 
 ​	在 Java 语言中，要重载（ Overload ）一个方法，除了要与原方法具有相同的简单名称之外，还要求必须拥有一个与原方法不同的特征签名，特征签名就是一个方法中各个参数在常量池中的字段符号引用的集合，也就是因为返回值不会包含在特征签名之中，因此Java语言里无法仅仅依靠返回值的不同来对一个已有方法进行重载。但在 Class 文件格式中，特征签名的范围更大一些，只要描述符不是完全一致的两个方法就可以共存。也就是说，如果两个方法有相同的名称和特征签名，但返回值不同，那么也是可以合法共存于同一个 Class 文件中。
+
+### 6.3.7 属性表集合
+
+​	在 Class 文件、字段表、方法表都可以携带自己的属性表集合，以用于描述某些场景专有的信息。
+
+​	与 Class 文件中其他的数据项目要求严格的顺序、长度和内容不同，不再要求各个属性表具有严格顺序，并且只要不与已有属性名重复，任何人实现的编译器都可以向属性表中写入自己定义的属性信息， Java 虚拟机运行时会忽略掉它不认识的属性。
+
+|属性名称	|使用位置	|含义|
+| ---- | ---- | ---- |
+|Code	                                    |方法表	            |Java代码编译成的字节码指令|
+|ConstantValue	                            |字段表	            |final关键字定义的常量值|
+|Deprecated	                                |类、方法表、字段表	|被声明为deprecated的方法和字段|
+|Exceptions	                                |方法表	            |方法抛出的异常|
+|EnclosingMethod	                        |类文件	            |仅当一个类为局部类或者匿名类时才能拥有这个属性，这个属性用于标识这个类所在的外围方法|
+|InnerClasses	                            |类文件	            |内部类列表|
+|LineNumberTable	                        |Code属性	        |Java源码的行号与字节码指令的对用关系|
+|LocalVariableTable	                        |Code属性	        |方法的局部变量描述|
+|StackMapTable	                            |Code属性	        |JDK1.6中新增的属性，供新的类型检查验证器（Type Checker）检查和处理目标方法的局部变量和操作数栈所需要的类型是否匹配|
+|Signature	                                |类、方法表、字段表	|JDK1.5中新增的属性，这个属性用于支持泛型情况下的方法签名，在Java语言中，任何类、接口、初始化方法或成员的泛型签名如果包含了类型变量（Type Variables）或参数化类型（Parameterized Types），则Signature属性会为他记录泛型签名信息。由于Java的泛型采用擦除法实现，在为了避免类型信息被擦出后导致签名混乱，需要这个属性记录泛型中的相关信息|
+|SourceFile	                                |类文件	            |记录源文件名称|
+|SourceDebugExtension	                    |类文件	            |JDK 1.6中新增的属性，SourceDebugExtension属性用于存储额外的调试信息，譬如在进行JSP文件调试时，无法同构Java堆栈来定位到JSP文件的行号，JSR-45规范为这些非Java语言编写，却需要编译成字节码并运行在Java虚拟机中的程序提供了一个进行调试的标准机制，使用SourceDebugExtension属性就可以用于存储这个标准所新加入的调试信息|
+|Synthetic	                                |类、方法表、字段表	|标识方法或字段为编译器自动生成的|
+|LocalVariableTypeTable	                    |类	                |JDK 1.5中新增的属性，他使用特征签名代替描述符，是为了引入泛型语法之后能描述泛型参数化类型而添加|
+|RuntimeVisibleAnnotations	                |类、方法表、字段表	|JDK 1.5中新增的属性，为动态注解提供支持。RuntimeVisibleAnnotations属性用于指明哪些注解是运行时（实际上运行时就是进行反射调用）可见的|
+|RuntimeInVisibleAnnotations	            |类、方法表、字段表	|JDK 1.5新增的属性，与RuntimeVisibleAnnotations属性作用刚好相反，用于指明哪些注解是运行时不可见的|
+|RuntimeVisibleParameter Annotations        |方法表	            |JDK 1.5新增的属性，作用与RuntimeVisibleAnnotations属性类似，只不过作用对象为方法参数|
+|RuntimeInVisibleAnnotations Annotations	|方法表	            |JDK 1.5中新增的属性，作用与RuntimeInVisibleAnnotations属性类似，只不过作用对象为方法参数|
+|AnnotationDefault	                        |方法表	            |JDK 1.5中新增的属性，用于记录注解类元素的默认值|
+|BootstrapMethods	                        |类文件	            |JDK 1.7中新增的属性，用于保存invokedynamic指令引用的引导方法限定符                        |
+
+
+![属性表结构体](resources/属性表结构体.jpg)
+
+#### 6.3.7.1 Code 属性
+
+| 类型           | 名称                   | 数量                   |
+| -------------- | ---------------------- | ---------------------- |
+| u2             | attribute_name_index   | 1                      |
+| u4             | attribute_length       | 1                      |
+| u2             | max_stack              | 1                      |
+| u2             | max_locals             | 1                      |
+| u4             | code_length            | 1                      |
+| u1             | code                   | code_length            |
+| u2             | exception_table_length | 1                      |
+| exception_info | exception_table        | exception_table_length |
+| u2             | attributes_count       | 1                      |
+| attribute_info | attributes             | attributes_count       |
+
+- attribute_name_index 是一项指向 CONSTANT_Utf8_info 型常量的索引，常量值固定为“Code”，它代表了该属性的属性名称。
+- attribute_length 表示属性值的长度。
+- max_stack 表示操作数栈的最大深度， JVM 运行的时候需要根据这个值来分配栈帧中的操作数栈深度。
+- max_locals 表示局部变量表所需要的存储空间。单位为 Slot ， Slot 是虚拟机为局部变量分配内存所使用的最小单位。对于 byte 、 char 、 float 、 int 、 short 、 boolean 和 returnAddress 等长度不超过 32 位的数据类型，每个局部变量占用 1 个 Slot ，而 double 和 long 这两种 64 位的数据类型则需要两个 Slot 来存放。方法参数（包括实例方法中的隐藏参数“this”）、显式异常处理器的参数（ Exception Handler Parameter ，就是 try-catch 语句中 catch 块所定义的异常）、方法体中定义的局部变量都需要使用局部变量表来存放。另外，并不是在方法中用到了多少个局部变量，就把这些局部变量所占 Slo t之和作为 max_locals 的值，原因是局部变量表中的 Slot 可以重用，当代码执行超出一个局部变量的作用域时，这个局部变量所占的 Slot 可以被其他局部变量所使用， Javac 编译器会根据变量的作用域来分配 Slot 给各个变量使用，然后计算出 max_locals 的大小。
+- code_length 代表字节码指令长度。虽然它是一个 u4 类型的长度值，理论上最大值可以达到2的32次方减1，但是虚拟机规范中明确限制了一个方法不允许超过65535条字节码指令，即他实际只使用了 u2 的长度，如果超过这个限制， Javac 编译器也会拒绝编译。一般来讲，编写 Java 代码时只要不是刻意去编写一个超长的方法来为难编译器，是不太可能超过这个最大值的限制。但是，某些特殊情况，例如在编译一个很复杂的 JSP 文件时，某些 JSP 编译器会把 JSP 内容和页面输出的信息归并于一个方法之中，就可能因为方法生成字节码超长的原因而导致编译失败。
+- code 用于存储字节码指令的一系列字节流，代表具体的字节码指令。根据 JVM 规范，每个字节码指令占用一个字节， JVM 可以自动识别该指令是否需要接收参数。目前， Java 虚拟机规范已经定义了其中约 200 条编码值对应的指令含义。Code 属性是 Class 文件中最重要的一个属性，如果把一个 Java 程序中的信息分为代码（ Code ，方法体里面的 Java 代码）和元数据（ Metadata ，包括类、字段、方法定义及其他信息）两部分，那么在整个 Class 文件中， Code 属性用于描述代码，所有的其他数据项目都用于描述元数据。
+- exception_table_length 表示异常表占用的字节数。
+- exception_table 表示具体的异常表。
+- Code 属性本身还有自己的一些属性表，包括 LineNumberTable 、 LocalVariableTable 和 StackMapTable ，这些属性不是必须的，如果有的话，会在 attributes_count 和 attributes 中体现出来。
+
+> ​	在任何实例方法里面，都可以通过“this”关键字访问到此方法所属的对象。这个访问机制对 Java 程序的编写很重要，而他的实现却非常简单，仅仅是通过javac编译器编译的时候把对 this 关键字的访问转变为对一个普通方法参数的访问，然后在虚拟机调用实例方法时自动传入此参数而已。因此在实例方法的局部变量表中至少会存在一个指向当前对象实例的局部变量，局部变量表中也会预留出第一个 Slot 位来存放对象实例的引用，方法参数值从1开始计算。这个处理只对实例方法有效，如果方法声明为 static ，那 Args_size 就不会等于1而是等于0了。
+
+​	 异常表的格式如下表所示，它包含4个字段，这些字段的含义为：如果当字节码在第 start_pc 行到 end_pc 行之间（不含第 end_pc 行）出现了类型为 catch_type 或者其子类的异常（ catch_type 为指向一个 CONSTANT_Class_info 型常量的索引），则转到第 handler_pc 行继续处理。当 catch_type 的值为0时，代表任意异常情况都需要转向到 handler_pc 处进行处理。
+
+| 类型 | 名称     | 数量 |
+| ---  | ------- | --- |
+| u2   | start_pc | 1    |
+| u2   | end_pc   | 1    |
+| u2   | handler_pc | 1  |
+| u2   | catch_type | 1  |
+
+> ​	此处字节码的“行”是一种形象的描述，指的是字节码相对于方法体开始的偏移量，而不是 Java 源码的行号。
+>
+> ​	在 JDK 1.4.2 之前的 Javac 编译器采用了 jsr 和 ret 指令实现 finally 语句，但1.4.2之后已经改为编译器自定在每段可能的分支路径之后都将 finally 语句块的内容冗余生成一遍来实现 finally 语义。在 JDK 1.7中，已经完全禁止 Class 文件中出现 jsr 和 ret 指令，如果遇到这两条指令，虚拟机会在类加载的字节码校验阶段抛出异常。
+
+![Code类型的属性表](resources/Code类型的属性表.jpg)
+
+#### 6.3.7.2 Exceptions 属性
+
+​	这里的 Exceptions 属性是在方法表与 Code 属性平级的一项属性。 Exceptions 属性的作用是列举出方法中可能抛出的受查异常（ Checked Exceptions ），也就是说方法描述时在 throws 关键字后面列举的异常。
+
+| 类型 | 名称                 | 数量 |
+| --- | ------------------- | --- |
+| u2   | attribute_name_index | 1    |
+| u4   | attribute_length     | 1    |
+| u2   | number_of_exceptions  | 1                    |
+| u2   | exception_index_table | number_of_exceptions |
+
+​	Exceptions 属性中的 number_of_exceptions 项表示方法可能抛出 number_of_exceptions 种受查异常，每一种受查异常使用一个 exception_index_table 项表示， exception_index_table 是一个指向常量池中 CONSTANT_Class_info 型常量的索引，代表了该受查异常的类型。
+
+![Exceptions类型的属性表](resources/Exceptions类型的属性表.jpg)
+
+#### 6.3.7.3 LineNumberTable 属性
+
+​	 LineNumberTable 属性用于描述 Java 源码行号与字节码行号（字节码的偏移量）之间的对应关系。并不是运行时必须的属性，但默认生成到 Class 文件之中，可以在 Javac 中分别使用 -g : none 或 -g : lines 选项来取消或要求生成这项信息。如果选择不生成 LineNumberTable 属性，对程序运行产生的最主要的影响就是当抛出异常时，堆栈中将不会显示出错的行号，并且在调试程序的时候，也无法按照源码行来设置断点。 LineNumberTable 属性的结构见下表。
+
+| 类型             | 名称                     | 数量                     |
+| :--------------- | :----------------------- | :----------------------- |
+| u2               | attribute_name_index     | 1                        |
+| u4               | attribute_length         | 1                        |
+| u2               | line_number_table_length | 1                        |
+| line_number_info | line_number_table        | line_number_table_length |
+
+​	line_number_table 是一个数量为 line_number_table_length 、类型为 line_number_info 的集合， line_number_info 表包括了 start_pc 和 line_number 两个 u2 类型的数据项，前者是字节码行号，后者是 Java 源码行号。
+
+#### 6.3.7.4 LineVariableTable 属性
+
+​	 LocalVariableTable 属性用于描述栈帧中局部变量表中的变量与 Java 源码中定义的变量之间的关系，也不是运行时必须的属性，但默认会生成到 Class 文件之中，可以在 Javac 中分别使用 -g : none 或 -g :vars 选项来取消或要求生成这项信息。如果没有生成这项属性，最大的影响就是当前其他人引用这个方法时，所有的参数名称都将会丢失， IDE 将会使用诸如 arg0 、 arg1 之类的占位符代替原有的参数名，这对程序运行没有影响，但是会对代码编写带来较大不便，而且在调试期间无法根据参数名称从上下文中获得参数值。 LocalVariableTable 属性的结构见下表。
+
+| 类型                | 名称                        | 数量                        |
+| :------------------ | :-------------------------- | :-------------------------- |
+| u2                  | attribute_name_index        | 1                           |
+| u4                  | attribute_length            | 1                           |
+| u2                  | local_variable_table_length | 1                           |
+| local_variable_info | local_variable_table        | local_variable_table_length |
+
+​	其中， local_variable_info 项目代表了一个栈帧与源码中的局部变量的关联，结构如下表。
+
+| 类型                | 名称                        | 数量                        |
+| :------------------ | :-------------------------- | :-------------------------- |
+| u2                  | start_pc                    | 1                           |
+| u2                  | length                      | 1                           |
+| u2                  | name_index                  | 1                           |
+| u2                  | descriptor_index            | 1                           |
+| u2                  | index                       | 1                           |
+
+​	 start_pc 和 length 属性分别代表了这个局部变量的生命周期开始地字节码偏移量及其作用范围覆盖的长度，两者结合起来就是这个局部变量在字节码之中的作用域范围。
+
+​	 name_index 和 descriptor_index 都是指向常量池中 CONSTANT_Utf8_info 型常量的索引，分别代表了局部变量的名称以及这个局部变量的描述符。
+
+​	index 是这个局部变量在栈帧局部变量表中 Slot 的位置。当这个变量数据类型是64位类型时（ double 和 long ），他占用的 Slot 为 index 和 index+1 两个。
+
+​	在JDK1.5引入泛型之后， LocalVariableTable 属性增加了一个“姐妹属性”： LocalVariableTypeTable ，这个新增的属性结构与 LocalVariableTable 非常相似，仅仅是把记录的字段描述符的 descriptor_index 替换成了字段的特征签名（ Signature ），对于非泛型类型来说，描述符和特征签名能描述的信息是基本一致的，但是泛型引入后，由于描述符中反省的参数化类型被擦除掉，描述符就不能准确的描述泛型类型了，因此出现了 LocalVariableTypeTable 。
+
+#### 6.3.7.5 SourceFile 属性
+
+​	 SourceFile 属性用于记录生成这个 Class 文件的源码文件名称。这个属性也是可选的，可以分别使用 Javac 的 -g :none 或 =g : source 选项来关闭或要求生成这项信息。在 Java 中，对于大多数的类来说，类名和文件名是一致的，但是有一些特殊情况（如内部类）例外。如果不生成这项属性，当抛出异常时，堆栈中将不会显示出错代码所属的文件名。这个属性是一个定长的属性，其结构见下表。
+
+> | 类型 | 名称                 | 数量 |
+> | :--- | :------------------- | :--- |
+> | u2   | attribute_name_index | 1    |
+> | u4   | attribute_length     | 1    |
+> | u2   | sourcefile_index     |      |
+
+​	 sourcefile_index 数据项是指向常量池中 CONSTANT_Utf8_info 型常量的索引，常量值是源码文件的文件名。
+
+#### 6.3.7.6 ConstantValue 属性
+
+​	ConstantValue 属性的作用是通知虚拟机自动为静态变量赋值。只有被 static 关键字修饰的变量（类变量）才可以使用这项属性。类似“int x = 123”和“static int x=123”这样的变量定义在 Java 程序中是非常常见的事情，但虚拟机对这两种变量赋值的方法和时刻都有所不同。对于非 static 类型的变量（也就是实例变量）的赋值是在实例构造器\<init\>方法中进行的；而对于类变量，则有两种方式可以选择：在类构造器\<clinit\>方法中或者使用 ConstantValue 属性。目前 Sun Javac 编译器的选择是：如果同时使用 final 和 static 来修饰一个变量（按照习惯，这里称“常量”更贴切），并且这个变量的数据类型是基本类型或者 java.lang.String 的话，就生成 ConstantValue 属性来进行初始化，如果这个变量没有被 final 修饰，或者并非基本类型及字符串，则将会选择在\<clinit\>方法中进行初始化。
+
+​        虽然有 final 关键字才更符合“ConstantValue”的语义，但虚拟机规范中并没有强制要求字段必须设置了 ACC_FINAL 标志，只要求了有 ConstantValue 属性的字段必须设置 ACC_STATIC 标志而已，对 final 关键字的要求是 javac 编译器自己加入的限制。而对 ConstantValue 属性值只能限于基本类型和 String ，此属性的属性值只是一个常量池的索引号，由于 Class 文件格式的常量类型中只有与基本属性和字符串相对应的字面量，所以就算 ConstantValue 属性在想支持别的类型也无能为力。ConstantValue属性的结构见下表。
+
+| 类型 | 名称                 | 数量 |
+| :--- | :------------------- | :--- |
+| u2   | attribute_name_index | 1    |
+| u4   | attribute_length     | 1    |
+| u2   | constantvalue_index  | 1    |
+
+​	 ConstantValue 属性是一个定长属性，它的 attribute_length 数据项值必须固定为2。 constantvalue_index 数据项代表了常量池中一个字面量常量的引用，根据字段类型的不同，字面量可以是 CONSTANT_Long_info 、 CONSTANT_Float_info 、 CONSTANT_Double_info 、 CONSTANT_Integer_info 、 CONSTANT_String_info 常量中的一种。
+
+#### 6.3.7.7 InnerClasses 属性
+
+​	InnerClasses 属性用于记录内部类与宿主类之间的关联。如果一个类中定义了内部类，那编译器将会为他以及他所包含的内部类生成InnerClasses属性。该属性的结构见下表。
+
+| 类型               | 名称                 | 数量              |
+| :----------------- | :------------------- | :---------------- |
+| u2                 | attribute_name_index | 1                 |
+| u4                 | attribute_length     | 1                 |
+| u2                 | number_of_class      | 1                 |
+| inner_classes_info | inner_class          | number_of_classes |
+
+​	数据项 number_of_classes 代表需要记录多少个内部类信息，每一个内部类的信息都由一个 inner_classes_info 表进行描述。 inner_classes_info 的结构见下表。
+
+| 类型 | 名称                    | 数量 |
+| :--- | :---------------------- | :--- |
+| u2   | inner_class_info_index  | 1    |
+| u2   | outer_class_info_index  | 1    |
+| u2   | inner_name_index        | 1    |
+| u2   | inner_class_access_info | 1    |
+
+​	inner_name_index 是指向常量池中 CONSTANT_Utf8_info 型常量的索引，代表这个内部类的名称，如果是匿名内部类，那么这项值为0。
+
+​	 inner_class_access_flags 是内部类的访问标志，类似于类的 access_flags 。
+
+#### 6.3.7.8 Deprecated 及 Synthetic 属性
+
+​	Deprecated 和 Synthetic 两个属性都属于标志类型的布尔属性。
+
+​	Deprecated 属性用于表示每个类、字段或者方法，已经被程序作者定位不在推荐使用，他可以通过在代码中使用 @deprecated 注释进行设置。
+
+​	Synthetic 属性代表此字段或者方法并不是由 Java 源码直接产生的，而是由编译器自行添加的，在 JDK 1.5之后，标识一个类、字段或者方法是编译器自动产生的，也可以设置他们访问标志中的 ACC_SYNTHETIC 标志位，其中最典型的例子就是 Bridge Method 。所有由非用户代码产生的类、方法及字段都应当至少设置 Synthetic 属性和 ACC_SYNTHETIC 标志位中的一项，唯一的例外是实例构造器“\<init\>”方法和类构造器“\<clinit\>”方法。
+
+#### 6.3.7.9 StackMapTable 属性
+
+​	StackMapTable 属性在 JDK 1.6发布后增加到了 Class 文件规范中，它是一个复杂的变长属性，位于 Code 属性的属性表，这个属性会在虚拟机类加载的字节码验证阶段被新类型检查验证器（ Type Checker ）使用，目的在于代替以前比较消耗性能的基于数据流分析的类型推导验证器。
+
+​	新的验证器在同样能保证 Class 文件合法性的前提下，省略了在运行期通过数据流分析确认字节码的行为逻辑合法性的步骤，而是在编译阶段将一系列的验证类型（Verification Types）直接记录在 Class 文件之中，通过检查这些验证类型代替了类型推导过程，从而大幅提升了字节码验证的性能。这个验证器在 JDK 1.6中首次提供，并在 JDK 1.7中强制代替原本基于类型推断的字节码验证器。
+
+​	 StackMapTable 属性中包含零至多个栈映射栈（Stack Map Frames），每个栈映射帧都显示或隐式的代表了一个字节码偏移量，用于表示该执行到该字节码时局部变量表和操作数栈的验证类型。类型检查验证器会通过检查目标方法的局部变量和操作数栈所需要的类型来确定一段字节码指令是否符合逻辑约束。 StackMapTable 属性的结构见下表。
+
+| 类型            | 名称                    | 数量              |
+| :-------------- | :---------------------- | :---------------- |
+| u2              | attribute_name_index    | 1                 |
+| u4              | attribute_length        | 1                 |
+| u2              | number_of_entries       | 1                 |
+| stack_map_frame | stack_map_frame_entries | number_of_entries |
+
+​	《 Java虚拟机规范（Java SE 7版）》明确规定：在版本号大于或等于50.0的 Class 文件中，如果方法的 Code 属性中没有附带 StackMapTable 属性，那就意味着他带有一个隐式的 StackMap 属性。这个 StackMap 属性的作用等同于 number_of_entries 值为0的 StackMapTable 属性。一个方法的 Code 属性最多只能有一个 StackMapTable 属性，否则将抛出 ClassFormatError 异常。
+
+#### 6.3.7.10 Signature 属性
+
+​	Signature 属性在 JDK 1.5发布后增加到了 Class 文件规范之中，他是一个可选的定长属性，可以出现于类、属性表和方法表结构的属性表中。在 JDK 1.5大幅增强了 Java 语言的语法，在此之后，任何类、接口、初始化方法或成员的泛型签名如果包含饿了类型变量（Type Variables）或参数化类型（Parameterized Types），则 Signature 属性会为他记录泛型签名信息。之所以要专门使用这样一个属性去记录泛型类型，是因为 Java 语言的泛型采用的是擦除法实现的伪泛型，在字节码（ Code 属性）中，泛型信息编译（类型变量、参数化类型）之后都统统被擦除掉。使用擦除法的好处是实现简单（主要修改 Javac 编译器，虚拟机内部只做了很少的改动）、非常容易实现 Backport ，运行期也能够节省一些类型所占的内存空间。但坏处是运行期就无法像 C# 等有真泛型支持的语言那样，将泛型类型与用户定义的普通类型同等对待，例如运行期做反射时无法获得到泛型信息。 Signature 属性就是为了弥补这个缺陷而增设的，现在 Java 的反射 API 能够获取泛型类型，最终的数据来源也就是这个属性。 Signature 属性的结构见下表。
+
+| 类型 | 名称                 | 数量 |
+| :--- | :------------------- | :--- |
+| u2   | attribute_name_index | 1    |
+| u4   | attribute_length     | 1    |
+| u2   | signature_index      | 1    |
+
+​	其中 signature_index 项的值必须是一个对常量池的有效索引。常量池在该索引处的项必须是 CONSTANT_Utf8_info 结构，表示类签名、方法类型签名或字段类型签名。如果当前的 Signature 属性是类文件的属性，则这个结构表示类签名，如果当前的 Signature 属性是方法表的属性，则这个结构表示方法类型签名，如果当前 Signature 属性是字段表的属性，则这个结构表示字段类型签名。
+
+#### 6.3.7.11 BootstrapMethods 属性
+
+​	BootstrapMethods 属性在 JDK 1.7发布后增加到了 Class 文件规范之中，他是一个复杂的变长属性，位于类文件的属性表中。这个属性用于保存 invokedynamic 指令引用的引导方法限定符。《Java虚拟机规范（Java SE 7版）》规定，如果某个类文件结构的常量池中曾经出现过 CONSTANT_InvokeDynamic_info 类型的常量，那么这个类文件的属性表中必须存在一个明确地 BootstrapMethods 属性，另外，即使 CONSTANT_InvokeDynamic_info 类型的常量在常量池中出现过多次，类文件的属性表中最多也只能一个 BootstrapMethods 属性。 BootstrapMethods 属性与 JSR-292 中的 InvokeDynamic 指令和 java.lang.Invoke 包关系非常密切。
+
+​	BootstrapMethods属性的结构见下表。
+
+| 类型             | 名称                  | 数量                  |
+| :--------------- | :-------------------- | :-------------------- |
+| u2               | attribute_name_index  | 1                     |
+| u4               | attribute_length      | 1                     |
+| u2               | num_bootstrap_methods | 1                     |
+| bootstrap_method | bootstrap_methods     | num_bootstrap_methods |
+
+​	其中引用到的bootstrap_method结构见下表。
+
+| 类型 | 名称                    | 数量                    |
+| :--- | :---------------------- | :---------------------- |
+| u2   | bootstrap_method_ref    | 1                       |
+| u2   | num_bootstrap_arguments | 1                       |
+| u2   | bootstrap_arguments     | num_bootstrap_arguments |
+
+​	BootstrapMethods 属性中， num_bootstrap_methods 项的值给出了 bootstrap_methods[] 数组中的引导方法限定符的数量。而 bootstrap_methods[] 数组的每个成员包含了一个指向常量池 CONSTANT_MethodHandle 结构的索引值，它代表了一个引导方法，还包含了这个引导方法静态参数的序列（可能为空）。 bootstrap_methods[] 数组中的每个成员必须包含以下3项内容。
+
+- **bootstrap_method_ref：** bootstrap_method_ref 项的值必须是一个对常量池的有效索引。常量池在该索引处的值必须是一个 CONSTANT_MethodHandle_info 结构。
+- **num_bootstrap_arguments：** num_bootstrap_arguments 项的值给出了 bootstrap_arguments[] 数组成员的数量。
+- **bootstrap_arguments[]：** bootstrap_arguments[] 数组的每个成员必须是一个对常量池的有效索引。常量池在该索引处必须是下列结构之一： CONSTANT_String_info 、 CONSTANT_Class_info 、 CONSTANT_Integer_info 、 CONSTANT_Long_info 、 CONSTANT_Float_info 、 CONSTANT_Double_info 、 CONSTANT_MethodHandle_info 或 CONSTANT_MethodType_info 。

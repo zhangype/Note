@@ -1063,3 +1063,139 @@ public static synchronized final void greeting() {}
 - **bootstrap_method_ref：** bootstrap_method_ref 项的值必须是一个对常量池的有效索引。常量池在该索引处的值必须是一个 CONSTANT_MethodHandle_info 结构。
 - **num_bootstrap_arguments：** num_bootstrap_arguments 项的值给出了 bootstrap_arguments[] 数组成员的数量。
 - **bootstrap_arguments[]：** bootstrap_arguments[] 数组的每个成员必须是一个对常量池的有效索引。常量池在该索引处必须是下列结构之一： CONSTANT_String_info 、 CONSTANT_Class_info 、 CONSTANT_Integer_info 、 CONSTANT_Long_info 、 CONSTANT_Float_info 、 CONSTANT_Double_info 、 CONSTANT_MethodHandle_info 或 CONSTANT_MethodType_info 。
+
+## 6.4 字节码指令简介
+
+ 	Java 虚拟机的指令由一个字节长度的、代表着某种特定操作含义的数字（称为操作码，Opcode）以及跟随其后的零至多个代表此操作所需参数（称为操作数，Operands）而构成。由于 Java 虚拟机采用面向操作数栈而不是寄存器的架构，所以大多数的指令都不包含操作数，只有一个操作码。
+
+​	字节码指令集是一种具有鲜明特点、优劣势都很突出的指令集架构，由于限制了 Java 虚拟机操作码的长度为一个字节（即 0 ~ 255），这意味着指令集的操作码总数不可能超过 256 条；又由于 Class 文件格式放弃了编译后代码的操作数长度对齐，这就意味着虚拟机处理那些超过一个字节数据的时候，不得不在运行时从字节中重建出具体数据的结构，如果要将一个 16 位长度的无符号整数使用两个无符号字节存储起来（将它们命名为 byte1 和 byte2），那它们的值应该是这样的：(byte1 << 8) | byte2。
+
+​	如果不考虑异常处理的话，那么 Java 虚拟机的解释器可以使用下面这个伪代码当做最基本的执行模型来理解，这个执行模型虽然很简单，但依然可以有效地工作：
+
+``` java
+do {
+     自动计算 PC 寄存器的值加 1;
+     根据 PC 寄存器的指示位置，从字节码流中取出操作码;
+     if ( 字节码存在操作数 ) 从字节码流中取出操作数;
+     执行操作码所定义的操作;
+} while ( 字节码流长度 > 0 )
+```
+
+### 6.4.1 字节码与数据类型
+
+​	在 Java 虚拟机的指令集中，大多数的指令都包含了其操作所对应的数据类型信息。例如，iload 指令用于从局部变量表中加载 int 型的数据到操作数栈中，而 fload 指令加载的则是 float 类型的数据。这两条指令的操作在虚拟机内部可能会是由同一段代码来实现的，但在 Class 文件中它们必须拥有各自独立的操作码。
+
+​	对于大部分与数据类型相关的字节码指令，它们的操作码助记符中都有特殊的字符来表明专门为哪种数据类型服务：i 代表对 int 类型的数据操作，l 代表 long，s 代表 short，b 代表 byte，c 代表 char，f 代表 float，d 代表 double，a 代表 reference。也有一些指令的助记符中没有明确地指明操作类型的字母，如 arraylength 指令，它没有代表数据类型的特殊字符，但操作数永远只能是一个数组类型的对象。还有另外一些指令，如无条件跳转指令 goto 则是与数据类型无关的。
+
+​	由于 Java 虚拟机的操作码长度只有一个字节，所以包含了数据类型的操作码就为指令集的设计带来了很大的压力。因此，Java 虚拟机的指令集对于特定的操作只提供了有限的类型相关指令去支持它，换句话说，指令集将会故意被设计成非完全独立的（Java 虚拟机规范中把这种特性称为 “Not Orthogonal”，即并非每种数据类型和每一种操作都有对应的指令）。有一些单独的指令可以在必要的时候用来将一些不支持的类型转换为可被支持的类型。
+
+​	下图列举了 Java 虚拟机所支持的与数据类型相关的字节码指令，通过使用数据类型列所代表的特殊字符替换 opcode 列的指令模板中的 T，就可以得到一个具体的字节码指令。如果在表中指令模板与数据类型两列共同确定的格为空，则说明虚拟机不支持这种数据类型执行这项操作。大部分的指令都没有支持整数类型 byte、char 和 short，甚至没有任何指令支持 boolean 类型。编译器会在编译器或运行期将 byte 和 short 类型的数据带符号扩展（Sign-Extend）为相应的 int 类型数据，将 boolean 和 char 类型数据零位扩展（Zero-Extend）为相应的 int 类型数据。与之类似，在处理 boolean、byte、short 和 char 类型的数组时，也会转换为使用对应的 int 类型的字节码指令来处理。
+
+![JVM指令集所支持的数据类型](resources/JVM指令集所支持的数据类型.jpg)
+
+### 6.4.2 加载和存储指令
+
+​	加载和存储指令用于将数据在栈帧中的局部变量表和操作数栈之间来回传输，这类指令包括如下内容。
+
+- 将一个局部变量加载到操作栈：iload、iload_\<n\>、lload、lload\_\<n\>、fload、fload\_\<n\>、dload、dload\_\<n\>、aload、aload\_\<n\>。
+
+- 将一个数值从操作数栈存储到局部变量表：istore、istore\_\<n\>、lstore、lstore\_\<n\>、fstore、fstore\_\<n\>、dstore、dstore\_\<n\>、astore、astore\_\<n\>。
+
+- 将一个常量加载到操作数栈：bipush、sipush、ldc、ldc_w、ldc2_w、aconst_null、iconst_m1、iconst\_\<i\>、lconst\_\<l\>、fconst\_\<f\>、dconst\_\<d\>。
+
+- 扩充局部变量的访问索引的指令：wide。
+
+​	存储数据的操作数栈和局部变量表主要就是由加载和存储指令进行操作，除此之外，还有少量指令，如访问对象的字段或数组元素的指令也会向操作数栈传输数据。
+
+​	上面所列举的指令助记符中，有一部分是以尖括号结尾的（例如 iload\_\<n\>），这些指令助记符实际上是代表了一组指令（例如 iload\_\<n\>，它代表了 iload_0、iload_1、iload_2 和 iload_3 这几条指令）。这几组指令都是某个带有一个操作数的通用指令（例如 iload）的特殊形式，对于这若干组特殊指令来说，它们省略掉了显示的操作数，不需要进行取操作数的动作，实际上操作数就隐含在指令中。除了这点之外，它们的语义与原生的通用指令完全一致（例如 iload_0 的语义与操作数为 0 时的 iload 指令语义完全一致）。
+
+### 6.4.3 运算指令
+
+​	运算或算术指令用于对两个操作数栈上的值进行某种特定运算，并把结果重新存入到操作栈顶。大体上算术指令可以分为两种：对整型数据进行运算的指令与对浮点型数据进行运算的指令。
+
+- 加法指令：iadd、ladd、fadd、dadd。
+
+- 减法指令：isub、lsub、fsub、dsub。
+
+- 乘法指令：imul、lmul、fmul、dmul。
+
+- 除法指令：idiv、ldiv、fdiv、ddiv。
+
+- 求余指令：irem、lrem、frem、drem。
+
+- 取反指令：ineg、lneg、fneg、dneg。
+
+- 位移指令：ishl、ishr、iushr、lshl、lshr、lushr。
+
+- 按位或指令：ior、lor。
+
+- 按位与指令：iand、land。
+
+- 按位异或指令：ixor、lxor。
+
+- 局部变量自增指令：iinc。
+
+- 比较指令：dcmpg、dcmpl、fcmpg、fcmpl、lcmp。
+
+​	Java 虚拟机规范要求虚拟机实现在处理浮点数时，必须严格遵循 IEEE 754 规范中所规定的行为和限制。也就是说，Java 虚拟机必须完全支持 IEEE 754 中定义的非正规浮点数值（Denormalized Floating-Point Numbers）和逐级下溢（Gradual Underflow）的运算规则。
+
+### 6.4.4 类型转换指令
+
+​	类型转换指令可以将两种不同的数值类型进行相互转换，这些转换操作一般用于实现用户代码中的显示类型转换操作，或者用来处理本节开篇所提到的字节码指令集中数据类型相关指令无法与数据类型一一对应的问题。
+
+### 6.4.5 对象创建与访问指令
+
+​	Java 虚拟机对类实例和数组的创建与操作使用了不同的字节码指令（数组和普通类型创建过程是不同的）
+
+。
+
+- 创建类实例的指令：new。
+- 创建数组的指令：newarray、anewarray、multianewarray。
+- 访问类字段（static 字段，或者成为类变量）和实例字段（非 static 字段，或者成为实例变量）的指令：getfield、putfield、getstatic、putstatic。
+- 把一个数组元素加载到操作数栈的指令：baload、caload、saload、iaload、laload、faload、daload、aaload。
+- 将一个操作数栈的值存储到数组元素中的指令：bastore、castore、sastore、iastore、fastore、dastore、aastore。
+- 取数组长度的指令：arraylength。
+- 检查类实例类型的指令：instanceof、checkcast。
+
+### 6.4.6 操作数栈管理指令
+
+​	如同操作一个普通数据结构中的堆栈那样，Java 虚拟机提供了一些用于直接操作操作数栈的指令，包括：
+
+- 将操作数栈的栈顶一个或两个元素出栈：pop、pop2。
+- 复制栈顶一个或两个数值并将复制值或双份的复制重新压入栈顶：dup、dup2、dup_x1、dup2_x1、dup_x2、dup2_x2。
+- 将栈最顶端的两个数值互换：swap。
+
+### 6.4.7 控制转移指令
+
+​	控制转移指令可以让 Java 虚拟机有条件或无条件地从指定的位置指令而不是控制转移指令的下一条指令继续执行程序，从概念模型上理解，可以认为控制转移指令就是在有条件或无条件地修改 PC 寄存器的值。控制转移指令如下。
+
+- 条件分支：ifeq、iflt、ifle、ifne、ifgt、ifge、ifnull、ifnonnull、if_icmpeq、if_icmpne、if_icmplt、if_icmpgt、if_icmple、if_icmpge、if_acmpeq 和 if_acmpne。
+- 复合条件分支：tableswitch、lookupswitch。
+- 无条件分支：goto、goto_w、jsr、jsr_w、ret。
+
+​	在 Java 虚拟机中有专门的指令集用来处理 int 和 reference 类型的条件分支比较操作，为了可以无须明显标识一个实体值是否 null，也有专门的指令用来检测 null 值。
+
+​	与前面算术运算是的规则一致，对于 boolean 类型、byte 类型、char 类型和 short 类型的条件分支比较操作，都是使用 int 类型的比较指令来完成，而对于 long 类型、float 类型和 double 类型的条件分支比较操作，则会先执行相应类型的比较运算指令（dcmpg、dcmpl、fcmpg、fcmpl、lcmp），运算指令会返回一个整形值到操作数栈中，随后再执行 int 类型的条件分支比较操作来完成整个分支跳转。由于各种类型的比较最终都会转化为 int 类型的比较操作，int 类型比较是否方便完善就显得尤为重要，所以 Java 虚拟机提供的 int 类型的条件分支指令是最为丰富和强大的。
+
+### 6.4.8 方法调用和返回指令
+
+- invokevirtual    指令用于调用对象的实例方法，根据对象的实际类型进行分派（虚方法分派），这也是 Java 语言中最常见的方法分派方式。
+- invokeinterface    指令用于调用接口方法，它会在运行时搜索一下实现了这个接口方法的对象，找出适合的方法进行调用。
+- invokespecial    指令用于调用一些需要特殊处理的实例方法，包括实例初始化方法、私有方法和父类方法。
+- invokestatic    指令用于调用类方法（static 方法）。
+- invokedynamic    指令用于在运行时动态解析出调用点限定符所引用的方法，并执行该方法，前面 4 条调用指令的分派逻辑都固化在 Java 虚拟机内部，而 invokedynamic 指令的分派逻辑是由用户所设定的引导方法决定的。
+
+### 6.4.9 异常处理指令
+
+​	在 Java 程序中显式抛出异常的操作（throw 语句）都由 athrow 指令来实现，除了用 throw 语句显式抛出异常情况之外，Java 虚拟机规范还规定了许多运行时异常会在其他 Java 虚拟机指令检测到异常状况时自动抛出。
+
+### 6.4.10 同步指令
+
+​	Java 虚拟机可以支持方法级的同步和方法内部一段指令序列的同步，这两种同步结构都是使用管程（Monitor）来支持的。
+
+​	方法级的同步是隐式的，即无须通过字节码指令来控制，它实现在方法调用和返回操作之中。虚拟机可以从方法常量池的方法表结构中的 ACC_SYNCHRONIZED 方法标志得知一个方法是否声明为同步方法。当方法调用时，调用指令将会检查方法的 ACC_SYNCHRONIZED 访问标志是否被设置，如果设置了，执行线程就要求先成功持有管程，然后才能执行方法，最后当方法完成（无论是正常完成还是非正常完成）时释放管程。在方法执行期间，执行线程持有了管程，其他任何线程都无法再获取到同一个管程。如果一个同步方法执行期间抛出了异常，并且在方法内部无法处理此异常，那么这个同步方法所持有的管程将在异常抛到同步方法之外时自动释放。
+
+​	同步一段指令集序列通常是由 Java 语言中的 synchronized 语句块来表示的，Java 虚拟机的指令集中有 monitorenter 和 monitorexit 两条指令来支持 synchronized 关键字的语义，正确实现 synchronized 关键字需要 javac 编译器与 Java 虚拟机两者共同协作支持。
+
+# 7 虚拟机类加载机制
+

@@ -1602,3 +1602,462 @@ protected Class<?> loadClass(String name, boolean resolve)
 ​	双亲委派模型的第三次“被破坏”是由于用户对程序的动态性（代码热替换、木块热部署等）的追求导致的，例如 OSGi 的出现。在 OSGi 环境下，类加载器不再是双亲委派模型中的树状结构，而是进一步发展为网状结构。
 
 # 8 虚拟机字节码执行引擎
+
+​	执行引擎是java虚拟机最核心的组成部件之一。虚拟机可以自行定制指令集与执行引擎的结构体系，并且能够执行那些不被硬件直接支持的指令集格式。
+
+​	在 Java 虚拟机规范中指定了虚拟机字节码执行引擎的概念模型，这个概念模型称为各种虚拟机执行引擎的同一外观。在不同的虚拟机实现里面，执行引擎在执行Java代码的时候可能会有解释执行（通过解释器执行）和编译执行（通过即时编译器产生本地代码执行）两种选择，也可能两者兼备，甚至还可能会包含几个不同级别的编译器执行引擎。但从外观上看起来，所有的Java虚拟机的执行引擎都是一致的：输入的是字节码文件，处理过程是字节码解析的等效过程，输出的是执行结果。
+
+## 8.2 运行时栈帧结构
+
+​	栈帧（ Stack frame ）是用于支持虚拟机进行方法调用和方法执行的数据结构，它是虚拟机运行时数据区中的虚拟机栈（ Virtual Machine Stack ）的栈元素。栈帧存储了方法的局部变量表、操作数栈、动态连接和方法返回地址等信息。每一个方法从调用开始到执行完成的过程，都对应着一个栈帧在虚拟机栈里面从入栈到出栈的过程。
+
+​	每一个栈帧都包括了局部变量表、操作数栈、动态连接、方法返回地址和一些额外的附加信息。在编译程序代码的时候，栈帧中需要多大的局部变量表,多深的操作数栈都已经完全确定了，并且写入到方法表的Code属性之中，因此一个栈帧需要分配多少内存，不会受到程序运行期变量数据的影响，而仅仅取决于具体的虚拟机实现。
+
+​	一个线程中的方法调用链可能会很长，很多方法都同时处于执行状态。对于执行引擎来说,在活动线程中，只有位于栈顶的栈帧才是有效的，称为当前栈帧（ Current Stack Frame ） ， 与这个栈帧相关联的方法称为当前方法（ Current Method ）。执行引擎运行的所有字节码指令都只针对当前栈帧进行操作，在概念模型上，典型的栈帧结构如图所示。
+
+![栈帧的概念结构](resources\栈帧的概念结构.jpg)
+
+### 8.2.1 局部变量表
+
+​	局部变量表（ Local Variable Table）是一组变量值存储空间，用于存放方法参数和方法内部定义的局部查量。在 Java 程序编译为 Class 文件时 ，就在方法的 Code 属性的 max_locals 数据项中确定了该方法所需要分配的局部变量表的最大容量。
+
+​	局部变量表的容量以变量槽（ Variable Slot，下称 Slot ）为最小单位，虚拟机规范中并没有明确指明一个 Slo t应占用的内存空间大小，只是很有导向性地说到每个 Slot 都应该能存放一 个 boolean 、 byte 、 char 、 short 、 int 、 float 、 reference 或 returnAddress 类型的数据，这8种数据类型，都可以使用32位或更小的物理内存来存放，但这种描述与明确指出“每个Slot占用32位长度的内存空间”是有一些差别的，它允许 Slot 的长度可以随着处理器、操作系统或虚拟机的不同而发生变化。只要保证即使在64位虚拟机中使用了64位的物理内存空间去实现一个Slot,，虚拟机仍要使用对齐和补白的手段让 Slot 在外观上看起来与32位虚拟机中的一致。
+
+​	既然前面提到了 Java 虚拟机的数据类型，在此再简单介绍一下它们。一个 Slot 可以存放一个32位以内的数据类型，Java中占用32位以内的数据类型有 boolean 、 byte 、 char 、 short 、 int 、 float 、 reference 和 returnAddress  8种类型。前面6种可以按照 Java 语言中对应数据类型的概念去理解它们（仅是这样理解而已， Java 语言与 Java 虚拟机中的基本数据类型是存在本质差别的），而第7种 reference 类型表示对一个对象实例的引用，虚拟机规范既没有说明它的长度，也没有明确指出这种引用应有怎样的结构。但一般来说，虚拟机实现至少都应当能通过这个引用做到两点，一是从此引用中直接或间接地查找到对象在 Java 堆中的数据存放的起始地址索引，二是此引用中直接或间接地查找到对象所属数据类型在方法区中的存储的类型信息，否则无法实现Java语言规范中定义的语法约束约束 。第8种即 returnAddress 类型目前已经很少见了，它是为字节码指令 jsr 、 jsr_w 和 ret 服务的，指向了一条字节码指令的地址，很古老的Java虚拟机曾经使用这几条指令来实现异常处理,现在已经由异常表代替。
+
+​	对于64位的数据类型，虚拟机会以高位对齐的方式为其分配两个连续的 Slot 空间。 Java 语言中明确的（ reference 类型则可能是32位也可能是64位）64位的数据类型只有 long 和 double 两种。这里把 long 和 double 数据矣型分割存储的做法与“ long 和 double 的非原子性协定” 中把一次 long 和 double 数据类型读写分割为两次32位读写的做法有些类似。不过，由于局部变量表建立在线程的堆栈上，是线程私有的数据，无论读写两个连续的 Slot 是否为原子操作，都不会引起数据安全问题。
+
+​	虚拟机通过索引定位的方式使用局部变量表，索引值的范围是从0开始至局部变量表最大的 Slot 数量。如果访问的是32位数据类型的变量，索引n就代表了使用第n个 Slot ，如果是64位数据类型的变量，则说明会同时使用 n 和 n+1 两个 Slot 。对于两个相邻的共同存放一个64位数据的两个 Slot ，不允许采用任何方式单独访问其中的某一个， Java 虚拟机规范中明确要求了如果遇到进行这种操作的字节码序列，虚拟机应该在类加载的校验阶段拋出异常。
+
+​	在方法执行时，虚拟机是使用局部变量表完成参数值到参数变量列表的传递过程的，如果执行的是实例方法（非 static 的方法），那局部变量表中第0位索引的 Slot 默认是用于传递方法所属对象实例的引用，在方法中可以通过关键字“this”来访问到这个隐含的参数。其余参数则按照参数表顺序排列，占用从1开始的局部变量 Slot ，参数表分配完毕后，再根据方法体内部定义的变量顺序和作用域分配其余的 Slot 。
+
+​	为了尽可能节省栈帧空间，局部变量表中的 Slot 是可以重用的，方法体中定义的变量， 其作用域并不一定会覆盖整个方法体，如果当前字节码 PC 计数器的值已经超出了某个变量的作用域 ，那这个变量对应的 Slot 就可以交给其他变量使用。不过 ，这样的设计除了节省栈帧空间以外，还会伴随一些额外的副作用，例如 ，在某些情况下， Slo t的复用会直接影响到系统的垃圾收集行为，如下看代码所示。
+
+​	代码清单8-1 局部变量表 Slot 复用对垃圾收集的影响之一
+
+``` java
+public static void main(String[] args)() {
+    byte[] placeholder = new byte[64 * 1024 * 1024];
+    System.gc();
+}
+```
+
+​	上面的代码很简单，即向内存填充了64MB的数据 ，然后通知虚拟机进行垃圾收集。我们在虚拟机运行参数中加上“-verbose : gc”来看看垃圾收集的过程，发现在 System.gc() 运行后并没有回收这64MB的内存，下面是运行的结果:
+
+[GC 66846K->65824K (125632K ) ，0.0032678 secs] [Full GC 65824K-> 65746K (125632K) ，0.0064131 secs]
+
+​	没有回收 placeholder 所占的内存能说得过去，因为在执行 Systemgc() 时 ，变量 placeholder 还处于作用域之内，虚拟机自然不敢回收 placeholder 的内存。
+
+​	代码清单8-2 局部变量表 Slot 复用对垃圾收集的影响之二
+
+``` java
+public static void main(String[] args)() {
+    {
+        byte[] placeholder = new byte[64 * 1024 * 1024];
+    }
+    System.gc();
+}
+```
+
+​	加入了花括号之后， placeholder 的作用域被限制在花括号之内，从代码逻辑上讲，在执行 System.gc() 的时候， placeholder 已经不可能再被访问了，但执行一下这段程序，会发现运行结果如下，还是有64MB的内存没有被回收。
+
+​	首先对这段代码进行第二次修改，在调用 System.gc() 之前加入 —行“int a=0;”，变成代码清单8-3的样子。
+
+​	代码清单8-3局部变量表 Slot 复用对垃圾收集的影响之三
+
+``` java
+public static void main(String[] args)() {
+    {
+        byte[] placeholder = new byte[64 * 1024 * 1024];
+    }
+    int a = 0;
+    System.gc();
+}
+```
+
+​	这个修改看起来莫名其妙，但运行一下程序，却发现这次内存真的被正确回收了。
+
+[GC 66401K-> 65778K (125632K ) ，0.0035471 secs] [Full GC 65778K->218K (125632K) ，0.0140596 secs]
+
+​	在代码清单8-1〜代码清单8-3中 ， placeholder 能否被回收的根本原因是：局部变量表中的 Slot 是否还存有关于 placeholder 数组对象的引用。第一次修改中，代码虽然已经离开了 placeholder 的作用域，但在此之后，没有任何对局部变量表的读写操作， placeholder 原本所占用的 Slot 还没有被其他变量所复用，所以作为 GC Roots —部分的局部变量表仍然保持着对它的关联。这种关联没有被及时打断，在绝大部分情况下影响都很轻微。但如果遇到一个方法 ，其后面的代码有一些耗时很长的操作，而前面又定义了占用了大量内存、实际上已经不会再使用的变量，手动将其设置为 null 值（用来代替那句int a=0， 把变量对应的局部变量表 Slot 清空）便不见得是一个绝对无意义的操作，这种操作可以作为一种在极特殊情形（对象占用内存大、此方法的栈帧长时间不能被回收、方法调用次数达不到 JIT 的编译条件）下的“奇技”来使用。 Java语言的一本非常著名的书籍《 Practical Java 》中把“不使用的对象应手动赋值为 null ”作为一条推荐的编码规则，但是并没有解释具体的原因，很长时间之内都有读者对这条规则感到疑惑。
+
+​	虽然代码清单8-1〜代码清单8-3的代码示例说明了赋 null 值的操作在某些情况下确实是有用的 ，但是不应当对赋 null 值的操作有过多的依赖，更没有必要把它当做一个普遍的编码规则来推广。原因有两点，从编码角度讲，以恰当的变量作用域来控制变量回收时间才是最优雅的解决方法，如代码清单8-3那样的场景并不多见。更关键的是，从执行角度讲 ，使用赋 null 值的操作来优化内存回收是建立在对字节码执行引擎概念模型的理解之上的。在虚拟机使用解释器执行时，通常与概念模型还比较接近，但经过 JIT 编译器后 ，才是虚拟机执行代码的主要方式 ，赋 null 值的操作在经过 JIT 编译优化后就会被消除掉，这时候将变量设置为 null 就是没有意义的。字节码被编译为本地代码后，对 GC Roots 的枚举也与解释执行时期有巨大差别，以前面例子来看，代码清单8-2在经过 JIT 编译后， System.gc() 执行时就可以正确地回收掉内存 ，无须写成代码清单8-3的样子。
+
+​	局部变量不像前面介绍的类变量那样存在“准备阶段”。如果一个局部变量定义了但没有赋初始值是不能使用的，不要认为 Java 中任何情况下都存在诸如整型变量默认为0，布尔型变量默认为 false 等这样的默认值。如下代码所示，这段代码其实并不能运行，还好编译器能在编译期间就检查到并提示这一点，即便编译能通过或者手动生成字节码的方式制造出下面代码的效果，字节码校验的时候也会被虛拟机发现而导致类加载失败。
+
+``` java
+public static void main(String[] args) {
+    int a;
+    System.out.println(a);
+}
+```
+
+### 8.2.2 操作数栈
+
+​	操作数栈（ Operand Stack ） 也常称为操作栈，它是一个后入先出（ Last In First Out，LIFO ）栈。同局部变量表一样，操作数栈的最大深度也在编译的时候写入到 Code 属性的 max_Stacks 数据项中。操作数栈的每一个元素可以是任意的 Java 数据类型，包括 long 和 double 。32位数据类型所占的栈容量为1 ，64位数据类型所占的栈容量为2。在方法执行的任何时候 ，操作数栈的深度都不会超过在 max_Stacks 数据项中设定的最大值。
+
+​	当一个方法刚刚开始执行的时候，这个方法的操作数栈是空的，在方法的执行过程中， 会有各种字节码指令往操作数栈中写入和提取内容，也就是出栈/入栈操作。例如 ，在做算术运算的时候是通过操作数栈来进行的，又或者在调用其他方法的时候是通过操作数栈来进行参数传递。
+
+​	举个例子，整数加法的字节码指令 iadd 在运行的时候操作数栈中最接近栈顶的两个元素已经存入了两个 int 型的数值，当执行这个指令时，会将这两个 int 值出栈并相加，然后将相加的结果入栈。
+
+​	操作数栈中元素的数据类型必须与字节码指令的序列严格匹配，在编译程序代码的时候，编译器要严格保证这一点，在类校验阶段的数据流分析中还要再次验证这一点。再以上面的 iadd 指令为例，这个指令用于整型数加法，它在执行时，最接近栈顶的两个元素的数据类型必须为 int 型，不能出现一个 long 和一个 float 使用 iadd 命令相加的情况。
+
+​	另外，在概念模型中，两个栈帧作为虚拟机栈的元素，是完全相互独立的。但大多虚拟机的实现里都会做一些优化处理，令两个栈帧出现一部分重叠。让下面栈帧的部分操作数栈与上面栈帧的部分局部变量表重叠在一起，这样在进行方法调用时就可以共用一部分数据，无须进行额外的参数复制传递，重叠的过程如下图所示。
+
+![两个栈帧之间的数据共享](resources\两个栈帧之间的数据共享.jpg)
+
+### 8.2.3 动态连接
+
+​    每个栈帧都包含一个指向运行时常量池中该栈帧所属方法的引用，持有这个引用是为了支持方法调用过程中的动态连接（ Dynamic Linking ）。我们知道Class文件的常量池中存有大量的符号引用，字节码中的方法调用指令就以常量池中指向方法的符号引用作为参数。这些符号引用一部分会在类加载阶段或者第一次使用的时候就转化为直接引用 ，这种转化称为静态解析。另外一部分将在每一次运行期间转化为直接引用，这部分称为动态连接。
+
+### 8.2.4 方法返回地址
+
+​	当一个方法开始执行后，只有两种方式可以退出这个方法。第一种方式是执行引擎遇到任意一个方法返回的字节码指令，这时候可能会有返回值传递给上层的方法调用（调用当前方法的方法称为调用者），是否有返回值和返回值的类型将根据遇到何种方法返回指令来决定，这种退出方法的方式称为正常完成出口（ Normal Method Invocation Completion ） 。
+
+​	另外一种退出方式是，在方法执行过程中遇到了异常，并且这个异常没有在方法体内得到处理，无论是 Java 虚拟机内部产生的异常，还是代码中使用 athrow 字节码指令产生的异常 ，只要在本方法的异常表中没有搜索到匹配的异常处理器，就会导致方法退出，这种退出方法的方式称为异常完成出口（ Abrupt Method Invocation Completion ）。一个方法使用异常完成出口的方式退出，是不会给它的上层调用者产生任何返回值的。
+
+​	无论采用何种退出方式，在方法退出之后，都需要返回到方法被调用的位置，程序才能继续执行，方法返回时可能需要在栈帧中保存一些信息，用来帮助恢复它的上层方法的执行状态。一般来说，方法正常退出时，调用者的 PC 计数器的值可以作为返回地址，栈帧中很可能会保存这个计数器值。而方法异常退出时，返回地址是要通过异常处理器表来确定的，栈帧中一般不会保存这部分信息。
+
+​	方法退出的过程实际上就等同于把当前栈帧出栈，因此退出时可能执行的操作有:恢复上层方法的局部变量表和操作数栈，把返回值（如果有的话）压入调用者栈帧的操作数栈中 ，调整 PC 计数器的值以指向方法调用指令后面的一条指令等。
+
+### 8.2.5 附加信息
+
+​	虚拟机规范允许具体的虚拟机实现增加一些规范里没有描述的信息到栈帧之中，例如与调试相关的信息，这部分信息完全取决于具体的虚拟机实现。在实际开发中 ，一般会把动态连接、方法返回地址与其他附加信息全部归为一类，称为栈帧信息。
+
+## 8.3 方法调用
+
+​	方法调用并不等同于方法执行，方法调用阶段唯一的任务就是确定被调用方法的版本（即调用哪一个方法），暂时还不涉及方法内部的具体运行过程。
+
+​	Class 文件的编译过程中不包含传统编译中的连接步骤，一切方法调用在 Class 文件里面存储的都只是符号引用，而不是方法在实际运行时内存布局中的入口地址（相当于之前说的直接引用）。
+
+### 8.3.1 解析
+
+​	方法调用中的目标方法在 Class 文件里面都是一个常量池中的符号引用，在类加载的解析阶段，会将其中的一部分符号引用转化为直接引用，这种解析能成立的前提是：方法在程序真正运行之前就有一个可确定的调用版本，并且这个方法的调用版本在运行期是不可改变的。换句话说，调用目标在程序代码写好、编译器进行编译时就必须确定下来。这类方法的调用称为解析（ Resolution ）。
+
+   在Java语言中符合“编译期可知，运行期不可变”这个要求的方法，主要包括静态方法和私有方法两大类，前者与类型直接关联，后者在外部不可被访问，这两种方法各自的特点决定了它们都不可能通过继承或别的方式重写其他版本，因此它们都适合在类加载阶段进行解析。
+
+​	与之相对应的是，在Java虚拟机里面提供了5条方法调用字节码指令，分别如下。
+
+- invokestatic：调用静态方法。
+
+- invokespecial：调用实例构造器＜init＞方法、私有方法和父类方法。
+
+- invokevirtual：调用所有的虚方法。
+
+- invokeinterface：调用接口方法，会在运行时再确定一个实现此接口的对象。
+
+- invokedynamic：先在运行时动态解析出调用点限定符所引用的方法，然后再执行该方法，在此之前的4条调用指令，分派逻辑是固化在Java虚拟机内部的，而invokedynamic指令的分派逻辑是由用户所设定的引导方法决定的。
+
+​	只要能被 invokestatic 和 invokespecial 指令调用的方法，都可以在解析阶段中确定唯一的调用版本，符合这个条件的有静态方法、私有方法、实例构造器、父类方法4类，它们在类加载的时候就会把符号引用解析为该方法的直接引用。这些方法可以称为非虚方法，与之相反，其他方法称为虚方法（除去final方法）。
+
+​	Java中的非虚方法除了使用 invokestatic 、 invokespecial 调用的方法之外还有一种，就是被 final 修饰的方法。虽然 final 方法是使用 invokevirtual 指令来调用的，但是由于它无法被覆盖，没有其他版本，所以也无须对方法接收者进行多态选择，又或者说多态选择的结果肯定是唯一的。在Java语言规范中明确说明了 final 方法是一种非虚方法。
+
+### 8.3.2 分派
+
+​	**1.静态分派**
+
+``` java
+public class StaticDispatch {
+	static abstract class Human{
+	}
+	static class Man extends Human{
+	}
+	static class Woman extends Human{
+	}
+	
+	public void sayHello(Human guy){
+		System.out.println("hello guy");
+	}
+	public void sayHello(Man guy){
+		System.out.println("hello gentleman");
+	}
+	public void sayHello(Woman guy){
+		System.out.println("hello lady");
+	}
+	public static void main(String[] args) {
+		Human man = new Man();
+		Human woman = new Woman();
+		StaticDispatch sr = new StaticDispatch();
+		sr.sayHello(man);
+		sr.sayHello(woman);
+	}
+}
+```
+
+​	运行结果：
+
+​	hello guy
+
+​	hello guy
+
+​	“Human”称为变量的静态类型（Static type ），或者叫做外观类型（ Apparent Type ），后面的“Man“称为变量的实际类型（ Actual Type ），静态类型和实际类型在程序中都可以发生一些变化，区别是静态类型的变化仅仅在使用时发生，变量本身的静态类型不会被改变，并且最终的静态类型是编译期可知的，而实际类型变化的结果在运行期才可确定，编译器在编译程序时并不知道一个对象的实际类型是什么。例如下面的代码：
+
+``` java
+// 实际类型变化
+Human man = new Man();
+man = new Woman();
+// 静态类型变化
+sr.sayHello((Man)man);
+sr.sayHello((Woman)man);
+```
+
+​	可以总结出虚拟机（准确地说是编译器）在重载的时候是通过参数的静态类型而不是实际类型作为判断依据的。并且静态类型时编译期可知的，因此，在编译阶段， Javac 编译器会根据参数的静态类型决定使用哪个重载版本。
+
+​	所有依赖静态类型来定位执版本的分配动作都称为静态分配，静态分配的典型案例就是方法重载。静态分派发生在编译阶段，因此确定静态分派在动作实际上不是有虚拟机来执行的。
+
+​	很多情况下重载的版本并不是唯一的，而是编译器选择一个最适合的版本。产生这种模糊结论的主要原因是字面量不需要定义，所以字面量没有显示的静态类型，它的静态类型只能通过语言上的规则去理解和推断。
+
+​	**2.动态分派**
+
+​	动态分派的过程和多态性的另外一个体现-重写（ Overrider ）有密切关联。
+
+``` java
+public class StaticDispatch {
+	static abstract class Human{
+		public abstract void sayHello();
+	}
+	static class Man extends Human{
+		@Override
+		public void sayHello(){
+			System.out.println("Man hello guy");
+		}		
+	}
+	static class Woman extends Human{
+		@Override
+		public void sayHello(){
+			System.out.println("Woman hello guy");
+		}			
+	}
+	
+	public static void main(String[] args) {
+		Human man = new Man();
+		Human woman = new Woman();
+		man.sayHello();
+		woman.sayHello();
+		
+		man = new Woman();
+		man.sayHello();
+	}	
+}
+```
+
+​	运行结果：
+
+​	Man hello guy
+
+​	Woman hello guy
+
+​	Woman hello guy
+
+​	导致这个现象的原因很明显，是这两个变量的实际类型不同。下面通过使用 javap 命令输出这段的字节码，来了解 Java 虚拟机如何根据实际类型来分派方法执行版本。
+
+> Compiled from "StaticDispatch.java"
+>
+> public class StaticDispatch {
+>
+>  public StaticDispatch();
+>
+>    Code:
+>
+>       0: aload_0
+>    
+>       1: invokespecial #8                 // Method java/lang/Object."<init>":()V
+>    
+>       4: return
+>
+>  
+>
+>
+>  public static void main(java.lang.String[]);
+>
+>    Code:
+>
+>       0: new           #16                 // class StaticDispatch$Man
+>    
+>       3: dup
+>    
+>        4: invokespecial #18                 // MethodStaticDispatch$Man."<init>":()V
+>    
+>       7: astore_1
+>    
+>       8: new           #19                 // class StaticDispatch$Woman
+>    
+>      11: dup
+>    
+>      12: invokespecial #21                // Method StaticDispatch$Woman."<init>":()V
+>    
+>      15: astore_2
+>    
+>      16: aload_1
+>    
+>      17: invokevirtual #22                // Method StaticDispatch$Human.sayHello:()V
+>    
+>      20: aload_2
+>    
+>      21: invokevirtual #22                // Method StaticDispatch$Human.sayHello:()V
+>    
+>       24: new           #19                 // class StaticDispatch$Woman
+>    
+>      27: dup
+>    
+>      28: invokespecial #21                // Method StaticDispatch$Woman."<init>":()V
+>    
+>      31: astore_1
+>    
+>      32: aload_1
+>    
+>      33: invokevirtual #22                // Method StaticDispatch$Human.sayHello:()V
+>    
+>      36: return
+>
+> }
+
+​	0～15行的字节码是准备动作，作用是建立 man 和 woman 的内存空间、调用 Man 和 Woman 类型的实例构造器，将这两个实例的引用存放在第1、2个局部变量表 Slot 之中，这个动作也就对应了代码中的这两句：
+
+``` java
+    Humanman = new Man();
+    Humanwoman = new Woman();
+```
+
+​	接下来的16～21句是关键部分，16、20两句分别把刚刚创建的两个对象的引用压到栈顶，这两个对象是将要执行的 sayHello()方法的所有者，称为接收者（ Receiver ）；17和21句是方法调用指令，这两条调用指令单从字节码角度来看，无论是指令（都是 invokevirtual ）还是参数（都是常量池中第22项的常量，注释显示了这个常量是 Human.sayHello()的符号引用）完全一样的，但是这两句指令最终执行的目标方法并不相同。原因就需要从 invokevirtual 指令的多态查找过程开始说起 invokevirtual 指令的运行时解析过程大致分为以下几个步骤：
+
+1. 找到操作数栈顶的第一个元素所指向的对象的实际类型，记作 C 。
+
+2. 如果在类型C中找到与常量中的描述符和简单名称都相符的方法，则进行访问权限校验，如果通过则返回这个方法的直接引用，查找结束；如果不通过，则返回 java.lang.IllegalAccessError 异常。
+
+3.  否则，按继承关系从下往上一次对 C 的个父类进行第2步的搜索和验证过程。
+
+4.  如果始终没有找到合适的方法，则抛出 java.lang.AbstractMethodError 异常。
+
+​	由于 invokevirtual 指令执行的第一步就是在运行期确定接收者的实际类型，所以两次调用中的 invokevirtual 指令把常量池中的类方法符号引用解析到了不同的直接引用上，这个过程是 Java 语言中方法重写的本质。这种在运行期根据实际类型确定方法执行版本的分派过程称为动态分派。
+
+​	**3.单分派与多分派**
+
+​	方法的接收者与方法的参数统称为方法的宗量。根据分派基于多少宗量，可以将分派划分为单分派和多分派两种。单分派是根据一个宗量对目标方法进行选择，多分派则是根据多于一个宗量对目标方法进行选择。
+
+​	Java 中静态分派的方法调用，首先确定调用者的静态类型是什么，然后根据要调用的方法参数的静态类型（声明类型）确定所有重载方法中要调用哪一个，需要根据这两个宗量来编译， 所以是静态多分派（多个宗量确定）。
+​	Java 中动态分派的方法调用，在运行期间，虚拟机会根据调用者的实际类型调用对应的方法，根据这一个宗量就可以确定要调用的方法，所以是动态单分派（一个宗量）。
+
+​	**4.虚拟机动态分派的实现**
+
+​	由于动态分派是非常频繁的动作，而且动态分派的方法版本选择过程需要运行时在类的方法元数据中搜索合适的目标方法，因此在虚拟机的实际实现中基于性能的考虑，大部分实现都不会真正地进行如此频繁的搜索。面对这种情况，最常用的“稳定优化”手段就是为类在方法区中建立一个虚方法表（ Vritual Method Table，也称为 vtable ，与此对应的，在 invokeinterface 执行时也会用到接口方法表—— Inteface Method Table ，简称 itable ），使用虚方法表索引来代替元数据查找以提高性能。如图所示。
+
+![方法表结构](resources\方法表结构.png)
+
+​	虚方法表中存放着各个方法的实际入口地址。如果某个方法在子类中没有被重写，那子类的虚方法表里面的地址入口和父类相同方法的地址入口是一致的，都指向父类的实现入口。如果子类中重写了这个方法，子类方法表中的地址将会替换为指向子类实现版本的入口地址。上图中， Son 重写了来自 Father 的全部方法，因此Son的方法表没有指向 Father 类型数据的箭头。但是 Son 和 Father 都没有重写来自 Object 的方法，所以它们的方法表中所有从 Object 继承来的方法都指向了 Object 的数据类型。
+
+​	为了程序实现上的方便，具有相同签名的方法，在父类、子类的虚方法表中都应当具有一样的索引序号，这样当类型变换时，仅需要变更查找的方法表，就可以从不同的虚方法表中按索引转换出所需的入口地址。
+
+​	方法表一般在类加载的连接阶段进行初始化，准备了类的变量初始值后，虚拟机会把该类的方法表也初始化完毕。
+
+​	除了使用方法表之外，在条件允许的情况下，还会使用内联缓存（ Inline Cache ）和基于“类型继承关系分析”（ Class Hierarchy Analysis , CHA ）技术的守护内联（ Guarded Inlining ）两种非稳定的“激进优化”手段来获得更高的性能。
+
+### 8.3.3 动态类型语言支持
+
+​	**1.动态类型语言**
+
+​	动态类型语言的关键特征是他的类型检查的主体过程是在运行期而不是在编译期。“变量无类型而变量值才有类型”这个特点也是动态类型语言的一个重要特征。
+
+​	**3.java.lang.invoke 包**
+
+​	java.lang.invoke 包的主要目的是在之前单纯依靠符号引用来确定调用的目标方法这种方式以外，提供一种新的动态确定目标方法的机制，称为 MethodHandle。
+
+``` java
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodType;
+import static java.lang.invoke.MethodHandles.lookup;
+ 
+public class MethodHandleTest {
+ 
+	static class ClassA{
+		public void println(String s){
+			System.out.println(s);
+		}
+	}
+	public static void main(String[] args) throws Throwable {
+		Object obj = System.currentTimeMillis() % 2 == 0 ? System.out : new ClassA();
+		
+		//无论obj最终是哪个实现类，下面这句都能正确调用到println方法
+		getPrintlnMH(obj).invokeExact("test");
+	}
+	private static MethodHandle getPrintlnMH(Object reveiver) throws Throwable{
+		//MethodType: 代表"方法类型"，包含了方法的返回值(methodType()的第一个参数)和具体参数(methodType()第二个及以后的参数)
+		MethodType mt = MethodType.methodType(void.class,String.class);
+		//lookup()方法来自于MethodHandles.lookup,这句的作用是在指定类中查找符合给定的方法名称、方法类型、并且符合调用权限的方法语柄
+		/*因为这里调用的是一个虚方法，按照Java语言的规则，方法第一个参数是隐式的，代表该方法的接受者，也即是this指向的对象，这个参数以前是放在
+		 参数列表中进行传递的，而现在提供了bindTo方法来完成这件事情*/
+		return lookup().findVirtual(reveiver.getClass(),"println",mt).bindTo(reveiver);
+		
+	}
+```
+
+​	实际上，方法 getPrintlnMH() 中模拟了 invokevirtual 指令的执行过程，只不过它的分派逻辑并非固化在 Class字节码上，而是通过一个具体方法来实现。而这个方法本身的返回值（ MethodHandle 对象），可以视为对最终调用方法的一个“引用”。以此为基础，有了 MethodHandle 就可以写出类似下面这样的函数声明：
+
+``` java
+	void sort(List list, MethodHandle compare)
+```
+
+​		仅站在 Java 语言的角度来看， MethodHandle 的使用方法和效果和 Reflection 有众多相似之处，不过，但是存在如下区别：
+
+- 从本质上讲， Reflection 和 MethodHandle 机制都是在模拟方法调用，但 Reflection 是
+  在模拟 Java 代码层次的方法调用，而 MethodHandle 是在模拟字节码层次的方法调用。在 MethodHandle.lookup 中的3个方法——findStatic() 、 findVirtual()、 findSpecial() 正是为了对应 invokestatic 、 invokevirtual & invokeinterface 和 invokespecial 这几条字节码指令的执行权限校验行为，而这些底层细节在使用 Reflection API 时是不需要关心的。
+
+- Reflection 中的 java.lang.reflect.Method 对象远比 MethodHandle 机制中的 java.lang.invoke.MethodHandle 对象包含的信息多。前者是方法在 Java 一端的全面映像，包含了方法的签名、描述符以及方法属性表中各种属性的 Java 端表示方式，还包含执行权限等的运行期信息。而后者仅仅包含与执行该方法相关的信息。 Reflection 是重量级， MethodHandle 是轻量级。
+
+- 由于 MethodHandle 是对字节码的方法指令调用的模拟，所以理论上虚拟机在这方面做的各种优化（如方法内联），在 MethodHandle 上也应当可以采用类似思路去支持，而不是通过反射调用方法。
+
+​		MethodHandle与Reflection除了，上面列举的区别外，最关键的一点还在于去掉前面讨
+  论施加的前提“仅站在Java语言的角度来看”: Reflection API的设计目标是只为Java语言
+  服务的，而MethodHandle则设计成可服务于所有Java虚拟机之上的语言。
+
+​	**4.invokedynamic 指令**
+
+​	在某种程度上， invokedynamic 指令与 MethodHandle 机制的作用是一样的，都是为了解决原有4条“invoke*“指令方法分派规则固化在虚拟机之中的问题，把如何查找目标方法的决定权从虚拟机转嫁到具体用户代码中，让用户有更高的自由度。而且，它们两者的思路也是可类比的，可以把它们想象成为了达成同一个目的，一个采用上层 Java 代码和 API 来实现，另一个用字节码和 Class 中其他属性、常量来完成。因此，如果理解了前面的 MethodHandle 例子，那么理解 invokedynamic 指令也并不困难。
+
+​	每一处含有 invokedynamic 指令的位置都称作“动态调用点“，这条指令的第一个参数不再是代表方法符号引用的 CONSTANT_Methodref_info 常量，而是变为 JDK1.7 新加入的 CONSTANT_invokeDynamic_info 常量，从这个新常量中可以得到3项信息：引导方法（BootstrapMethod，此方法存放在新增的 BootstrapMethods 属性中）、方法类型（ MethodType ）和名称。引导方法是有固定的参数，并且返回值是 java.lang.invokeCallSite 对象，这个代表真正要执行的目标方法调用。根据 CONSTANT_invokeDynamic_info 常量中提供的信息，虚拟机可以找到并且执行引导方法，从而获得一个CallSite对象，最终调用要执行的目标方法。如下代码。
+
+``` java
+package org.administrator.classexec;
+ 
+import java.lang.invoke.CallSite;
+import java.lang.invoke.ConstantCallSite;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+ 
+public class InvokeDynamicTest {
+	public static void main(String []args) throws Throwable{
+		INDY_BootstrapMethod().invokeExact("test");
+	}
+	
+	public static void testMethod(String s){
+		System.out.println("hello String:"+s);
+	}
+	
+	public static CallSite BootstrapMethod(MethodHandles.Lookup lookup,String name,MethodType mt) throws Throwable{
+		return new ConstantCallSite(lookup.findStatic(InvokeDynamicTest.class, name, mt));
+	}
+	
+	private static MethodType MT_BootstrapMethod(){
+		return MethodType.fromMethodDescriptorString("(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;", null);
+	}
+	
+	private static MethodHandle MH_BootstrapMethod() throws Throwable{
+		return MethodHandles.lookup().findStatic(InvokeDynamicTest.class,"BootstrapMethod",MT_BootstrapMethod());
+	}
+	private static MethodHandle INDY_BootstrapMethod() throws Throwable{
+		CallSite cs=(CallSite)MH_BootstrapMethod().invokeWithArguments(MethodHandles.lookup(),"testMethod",MethodType.fromMethodDescriptorString("(Ljava/lang/String;)V", null));
+		return	cs.dynamicInvoker();
+	}
+}
+```
+
+​	这段代码与前面的 MethodHandleTest 的作用基本一致，由于 invokedynamic 所面向的使用者并非 Java 语言，而是其他 Java 虚拟机之上的动态语言，因此依靠 Java 语言的编译器 Javac 没有办法生成带有 invokedynamic 指令的字节码，所以要使用 Java 语言来演示 invokedynamic 指令只能用一些变通的办法。 JhonRose 编写了一个把程序的字节码转换为使用 invokedynamic 的简单工具 INDY 来完成这件事情，我们要使用这个工具来产生最终要的字节码，因此这个示例代码中的方法名称不能随意改动，更不能把几个方法合并到一起写，因为它们是要被 INDY 工具读取的。
+
+​	把上面代码编译再使用 INDY 转换后重新生成的字节码，从 main() 方法的字节码，原本的方法调用指令已经替换为 invokedynamic 。
+
+​	**5.掌控方法分派原则**
+
+​	invokedynamic 指令与前面4条“invoke*“指令的最大差别就是它的分派逻辑不是由虚拟机决定的，而是由程序员决定的。
+
+## 8.4 基于栈的字节码解释执行引擎

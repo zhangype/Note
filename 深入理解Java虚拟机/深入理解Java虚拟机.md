@@ -425,7 +425,7 @@ public class DirectMemoryOOM {
 
 ​	接下来的“[DefNew”、“[Tenured”、“[Perm”表示GC发生的区域，这里显示的区域名称与使用的GC收集是密切相关的，例如上面样例所使用的Serial收集器中的新生代名为“Default New Generation”，所以显示的是“[DefNew”。
 
-​	后面方括号内部的“3324K-＞152K（3712K）”含义是“GC前该内存区域已使用容量-＞GC后该内存区域已使用容量（该内存区域总容量）”。 
+​	后面方括号内部的“3324K-＞152K（3712K）”含义是“GC前该内存区域已使用容量-＞GC后该内存区域已使用容量（该内存区域总容量）”。
 而在方括号之外的“3324K-＞152K（11904K）”表示“GC前Java堆已使用容量-＞GC后Java堆已使用容量（Java堆总容量）”。
 
 ​	再往后，“0.0025925 secs”表示该内存区域GC所占用的时间，单位是秒。
@@ -1441,7 +1441,7 @@ newarray、checkcast、getfield、getstatic、instanceof、invokedynamic、invok
           }
       }
   }
-  
+
   public statci void main (String[] args) {
       Runnable script = new Runnable () {
           public void run () {
@@ -1450,7 +1450,7 @@ newarray、checkcast、getfield、getstatic、instanceof、invokedynamic、invok
               System.out.println(Thread.currentThread() + "run over");
           }
       };
-      
+
       Thread thread1 = new Thread(script);
       Thread thread2 = new Thread(script);
       thread1.start();
@@ -1478,14 +1478,14 @@ newarray、checkcast、getfield、getstatic、instanceof、invokedynamic、invok
 
 ``` java
 public class ClassLoaderTest {
-    
+
 	public static void main(String[] args) throws Exception {
 		ClassLoader myLoader = new ClassLoader() {
 			@Override
 			public Class<?> loadClass(String name) throws ClassNotFoundException {
 				try {
 					String className = name.substring(name.lastIndexOf(".") + 1) + ".class";
-					
+
 					//返回读取指定资源的输入流
 					InputStream is = getClass().getResourceAsStream(className);
 					if (is == null) {
@@ -1493,7 +1493,7 @@ public class ClassLoaderTest {
                     }
 					byte[] b = new byte[is.available()];
 					is.read(b);
-					
+
 					//将一个byte数组转换为Class类的实例
 					return defineClass(name, b, 0, b.length);
 				} catch (IOException e) {
@@ -1501,7 +1501,7 @@ public class ClassLoaderTest {
 				}
 			}
 		};
-		
+
 		Object object = myLoader.loadClass("test.ClassLoaderTest").newInstance();
 		System.out.println(object.getClass());
 		System.out.println(object instanceof test.ClassLoaderTest);
@@ -1562,13 +1562,13 @@ protected Class<?> loadClass(String name, boolean resolve)
                 // ClassNotFoundException thrown if class not found  
                 // from the non-null parent class loader  
             }  
-  
+
             if (c == null) {  
                 // If still not found, then invoke findClass in order  
                 // to find the class.  
                 long t1 = System.nanoTime();  
                 c = findClass(name);  
-  
+
                 // this is the defining class loader; record the stats  
                 sun.misc.PerfCounter.getParentDelegationTime().addTime(  
                         t1 - t0);  
@@ -1764,7 +1764,7 @@ public class StaticDispatch {
 	}
 	static class Woman extends Human{
 	}
-	
+
 	public void sayHello(Human guy){
 		System.out.println("hello guy");
 	}
@@ -1828,16 +1828,16 @@ public class StaticDispatch {
 			System.out.println("Woman hello guy");
 		}			
 	}
-	
+
 	public static void main(String[] args) {
 		Human man = new Man();
 		Human woman = new Woman();
 		man.sayHello();
 		woman.sayHello();
-		
+
 		man = new Woman();
 		man.sayHello();
-	}	
+	}
 }
 ```
 
@@ -1966,9 +1966,9 @@ public class StaticDispatch {
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import static java.lang.invoke.MethodHandles.lookup;
- 
+
 public class MethodHandleTest {
- 
+
 	static class ClassA{
 		public void println(String s){
 			System.out.println(s);
@@ -1976,7 +1976,7 @@ public class MethodHandleTest {
 	}
 	public static void main(String[] args) throws Throwable {
 		Object obj = System.currentTimeMillis() % 2 == 0 ? System.out : new ClassA();
-		
+
 		//无论obj最终是哪个实现类，下面这句都能正确调用到println方法
 		getPrintlnMH(obj).invokeExact("test");
 	}
@@ -1987,7 +1987,7 @@ public class MethodHandleTest {
 		/*因为这里调用的是一个虚方法，按照Java语言的规则，方法第一个参数是隐式的，代表该方法的接受者，也即是this指向的对象，这个参数以前是放在
 		 参数列表中进行传递的，而现在提供了bindTo方法来完成这件事情*/
 		return lookup().findVirtual(reveiver.getClass(),"println",mt).bindTo(reveiver);
-		
+
 	}
 ```
 
@@ -2018,30 +2018,30 @@ public class MethodHandleTest {
 
 ``` java
 package org.administrator.classexec;
- 
+
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
- 
+
 public class InvokeDynamicTest {
 	public static void main(String []args) throws Throwable{
 		INDY_BootstrapMethod().invokeExact("test");
 	}
-	
+
 	public static void testMethod(String s){
 		System.out.println("hello String:"+s);
 	}
-	
+
 	public static CallSite BootstrapMethod(MethodHandles.Lookup lookup,String name,MethodType mt) throws Throwable{
 		return new ConstantCallSite(lookup.findStatic(InvokeDynamicTest.class, name, mt));
 	}
-	
+
 	private static MethodType MT_BootstrapMethod(){
 		return MethodType.fromMethodDescriptorString("(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;", null);
 	}
-	
+
 	private static MethodHandle MH_BootstrapMethod() throws Throwable{
 		return MethodHandles.lookup().findStatic(InvokeDynamicTest.class,"BootstrapMethod",MT_BootstrapMethod());
 	}
@@ -2130,9 +2130,9 @@ public class InvokeDynamicTest {
 - Bundle C：声明发布了 packageC，依赖了 packageA。
 
  ​	那么，这三个 Bundle 之间的类加载器及父类加载器之间的关系如图 9-2 所示。
- 
+
  ![OSGi的类加载架构](\resources\OSGi的类加载架构.jpg)
- 
+
  ​	由于没有牵扯到具体的 OSGi 实现，所以图 9-2 中的类加载器都没有指明具体的加载器实现，只是一个体现了加载器之间关系的概念模型，并且只是体现了 OSGi 中最简单的加载器委派关系。一般来说，在 OSGi 中，加载一个类可能发生的查找行为和委派关系会比图 9-2 中显示的复杂得多，类加载时可能进行的查找规则如下：
 
 - 以 java.* 开头的类，委派给父类加载器加载。
@@ -2142,6 +2142,7 @@ public class InvokeDynamicTest {
 - 否则，查找是否在自己的 Fragment Bundle 中，如果是，则委派给 Fragment Bundle 的类加载器加载。
 - 否则，查找 Dynamic Import 列表的 Bundle，委派给对应 Bundle 的类加载器加载。
 - 否则，类查找失败。
+
 
  ​	从图 9-2 中还可以看出，在 OSGi 里面，加载器之间的关系不再是双亲委派模型的属性结构，而是已经进一步发展成了一种更为复杂的、运行时才能确定的网状结构。这种网状的类加载器架构在带来更好的灵活性的同时，也可能会产生许多新的隐患。曾经参与过将一个非 OSGi 的大型系统向 Equinox OSGi 平台迁移的项目，由于历史原因，代码模块之间的的依赖关系错综复杂，勉强分离出各个模块的 Bundle 后，发现在高并发环境下经常出现死锁。我们很容易就找到了死锁的原因：如果出现了 Bundle A 依赖于 Bundle B 的 Package B，而 Bundle B 又依赖了 Bundle A 的 Package A，这两个 Bundle 进行类加载时就很容易发生死锁。具体情况是当 Bundle A 加载 Package B 的类时，首先需要锁定当前类加载器的实例对象（java.lang.ClassLoader.loadClass() 是一个 synchronized 方法），然后把请求委派给 Bundle B 的加载器处理，但如果这时候 Bundle B 也正好想加载 Package A 的类，它也先锁定自己的加载器再去请求 Bundle A 的加载器处理，这样，两个加载器都在等待对方处理自己的请求，而对方处理完之前自己又一直处于同步锁定的状态，因此它们就互相死锁，永远无法完成加载请求了。Equinox 的 Bug List 中有关于这类问题的 Bug，也提供了一个以牺牲性能为代价的解决方案——用户可以启用 osgi.classloader.singleThreadLoads 参数来按单线程串行化的方式强制进行类加载器动作。在 JDK 1.7 中，为非树状继承关系下的类加载器架构进行了一次专门的升级，目的是从底层避免这类死锁出现的可能。
 
@@ -2159,30 +2160,30 @@ public class InvokeDynamicTest {
     import java.lang.reflect.InvocationHandler;
     import java.lang.reflect.Method;
     import java.lang.reflect.Proxy;
-     
+
     public class DynamicProxyTest {
-     
+
     	interface IHello {
     		void sayHello();
     	}
-    	
+
     	static class Hello implements IHello {
     		@Override
     		public void sayHello() {
     			 System.out.println("hello world");
     		}
     	}
-    	
+
     	static class DynamicProxy implements InvocationHandler {
-     
+
     		Object originalObj;
-    		
+
     		Object bind(Object originalObj) {
     			this.originalObj = originalObj;
-    			return Proxy.newProxyInstance(originalObj.getClass().getClassLoader(), 
+    			return Proxy.newProxyInstance(originalObj.getClass().getClassLoader(),
     					originalObj.getClass().getInterfaces(), this);
     		}
-    		
+
     		@Override
     		public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
     			System.out.println("welcome");
@@ -2190,7 +2191,7 @@ public class InvokeDynamicTest {
     		}
     		
     	}
-    	
+
     	public static void main(String[] args) throws Exception {
     		IHello hello = (IHello) new DynamicProxy().bind(new Hello());
     		hello.sayHello();
@@ -2200,10 +2201,9 @@ public class InvokeDynamicTest {
 
   运行结果如下：
 
-``` java
-    welcome
-    hello world
-```
+> welcome
+> hello world
+
 
  ​	上述代码里，唯一的 “黑匣子” 就是 Proxy.newProxyInstance() 方法，除此之外再没有任何特殊之处。这个方法返回一个实现了 IHello 的接口，并且代理了 new Hello() 实例行为的对象。跟踪这个方法的源码，可以看到程序进行了验证、优化、缓存、同步、生成字节码、显式类加载等操作，前面的步骤并不是我们关注的重点，而最后它调用了  方法来完成生成字节码的动作，这个方法可以在运行时产生一个描述代理类的字节码 byte[] 数组。如果想看一看这个再运行时产生的代理类中写了什么，可以在main() 方法中加入下面这句：
 

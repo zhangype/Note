@@ -2105,7 +2105,7 @@ public class InvokeDynamicTest {
 
 ​	为了支持这套目录结构，并对目录里面的类库进行加载和隔离，Tomcat 自定义了多个类加载器，这些类加载器按照经典的双亲委派模型来实现，其关系如图所示。
 
-![Tomcat服务器的类加载架构](\resources\Tomcat服务器的类加载架构.jpg)
+![Tomcat服务器的类加载架构](resources\Tomcat服务器的类加载架构.jpg)
 
 ​	灰色背景的 3 个类加载器是 JDK 默认提供的类加载器，这 3 个加载器的作用前面已经介绍过了。而 CommonClassLoader、CatalinaClassLoader、SharedClassLoader 和 WebAppClassLoader 则是 Tomcat 自己定义的类加载器，它们分别加载 /common/\*、/server/\*、/shared/\* 和 /WebApp/WEB-INF/\* 中的 Java 类库。其中 WebApp 类加载器和 Jsp 类加载器通常会存在多个实例，每一个 Web 应用程序对应一个 WebApp 类加载器，每一个 JSP 文件对应一个 Jsp 类加载器。
 
@@ -2131,7 +2131,7 @@ public class InvokeDynamicTest {
 
  ​	那么，这三个 Bundle 之间的类加载器及父类加载器之间的关系如图 9-2 所示。
 
- ![OSGi的类加载架构](\resources\OSGi的类加载架构.jpg)
+ ![OSGi的类加载架构](resources\OSGi的类加载架构.jpg)
 
  ​	由于没有牵扯到具体的 OSGi 实现，所以图 9-2 中的类加载器都没有指明具体的加载器实现，只是一个体现了加载器之间关系的概念模型，并且只是体现了 OSGi 中最简单的加载器委派关系。一般来说，在 OSGi 中，加载一个类可能发生的查找行为和委派关系会比图 9-2 中显示的复杂得多，类加载时可能进行的查找规则如下：
 
@@ -2189,7 +2189,7 @@ public class InvokeDynamicTest {
     			System.out.println("welcome");
     			return method.invoke(originalObj, args);
     		}
-    		
+
     	}
 
     	public static void main(String[] args) throws Exception {
@@ -2204,12 +2204,101 @@ public class InvokeDynamicTest {
 > welcome
 > hello world
 
-
  ​	上述代码里，唯一的 “黑匣子” 就是 Proxy.newProxyInstance() 方法，除此之外再没有任何特殊之处。这个方法返回一个实现了 IHello 的接口，并且代理了 new Hello() 实例行为的对象。跟踪这个方法的源码，可以看到程序进行了验证、优化、缓存、同步、生成字节码、显式类加载等操作，前面的步骤并不是我们关注的重点，而最后它调用了  方法来完成生成字节码的动作，这个方法可以在运行时产生一个描述代理类的字节码 byte[] 数组。如果想看一看这个再运行时产生的代理类中写了什么，可以在main() 方法中加入下面这句：
 
 ``` java
     System.getProperties().put("sun.misc.ProxyGenerator.saveGeneratedFiles", "true");
 ```
+
+ ​	加入这句代码后再次运行程序，磁盘中将会产生一个名为 “$Proxy0.class” 的代理类 Class 文件（注：应该先在“项目目录”，非“ClassPath 目录”下，建立和包名对应的文件夹，如下图所示），反编译后可以看见如代码清单 9-2 所示的内容。
+
+![OSGi的类加载架构](resources\代理类Class文件.jpg)
+
+
+``` java
+package org.fenixsoft.def;
+
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.lang.reflect.UndeclaredThrowableException;
+
+public final class $Proxy0
+  extends Proxy
+  implements DynamicProxyTest.IHello
+{
+  private static Method m3;
+  private static Method m1;
+  private static Method m0;
+  private static Method m2;
+
+  public $Proxy0(InvocationHandler paramInvocationHandler)
+  {
+    super(paramInvocationHandler);
+  }
+
+  public final void sayHello()
+  {
+    try
+    {
+      this.h.invoke(this, m3, null);
+      return;
+    }
+    catch (Error|RuntimeException localError)
+    {
+      throw localError;
+    }
+    catch (Throwable localThrowable)
+    {
+      throw new UndeclaredThrowableException(localThrowable);
+    }
+  }
+
+  // 此处由于版面原因，省略 equals()、hashCode()、toString() 三个方法的代码
+  // 这 3 个方法的内容与 sayHello() 非常相似
+
+ static
+  {
+    try
+    {
+      m3 = Class.forName("org.fenixsoft.def.DynamicProxyTest$IHello").getMethod("sayHello", new Class[0]);
+      m1 = Class.forName("java.lang.Object").getMethod("equals", new Class[] { Class.forName("java.lang.Object") });
+      m0 = Class.forName("java.lang.Object").getMethod("hashCode", new Class[0]);
+      m2 = Class.forName("java.lang.Object").getMethod("toString", new Class[0]);
+      return;
+    }
+    catch (NoSuchMethodException localNoSuchMethodException)
+    {
+      throw new NoSuchMethodError(localNoSuchMethodException.getMessage());
+    }
+    catch (ClassNotFoundException localClassNotFoundException)
+    {
+      throw new NoClassDefFoundError(localClassNotFoundException.getMessage());
+    }
+  }
+}
+```
+
+ ​	这个代理类的实现代码也很简单，它为传入接口中的每一个方法，以及从 java.lang.Object 中继承来的 equals()、hashCode()、toString() 方法都生成了对应的实现，并且统一调用了 InvocationHandler 对象的 invoke() 方法（代码中的 “this.h” 就是父类 Proxy 中保存的 InvocationHandler 实例变量）来实现这些方法的内容，各个方法的区别不过是传入的参数和 Method 对象有所不同而已，所以无论调用动态代理的哪一个方法，实际上都是在执行 InvocationHandler.invoke() 中的代理逻辑。
+
+ ​	这个例子中并没有讲到 generateProxyClass() 方法具体是如何产生代理类 “$Proxy0.class” 的字节码的，大致的生成过程其实就是根据 Class 文件的格式规范去拼装字节码，但在实际开发中，以 byte 为单位直接拼装出字节码的应用场合很少见，这种生成方式也只能产生一些高度模板化的代码。对于用户的程序代码来说，如果有要大量操作字节码的需求，还是使用封装好的字节码类库比较合适。可以在 OpenJDK 的 jdk/src/share/classes/sun/misc 目录下找到 sun.misc.ProxyGenerator 的源码。
+
+### 9.2.4 Retrotranslator：跨越 JDK 版本
+
+ ​	Retrotranslator 的作用是将 JDK 1.5 编译出来的 Class 文件转变为可以在 JDK 1.4 或 1.3 上部署的版本，它可以很好地支持自动装箱、泛型、动态注解、枚举、变长参数、遍历循环、静态导入这些语法特性，甚至还可以支持 JDK 1.5 中新增的集合改进、并发包以及对泛型、注解等的反射操作。
+
+ ​	要想知道 Retrotranslator 如何在旧版本 JDK 中模拟新版本 JDK 的功能，首先要弄清楚 JDK 升级中会提供哪些新的功能。JDK 每次升级新增的功能大致可以分为以下 4 类：
+
+- 在编译器层面做的改进。如自动装箱拆箱，实际上就是编译器在程序中使用到包装对象的地方自动插入了很多 Integer.valueOf()、Float.valueOf() 之类的代码；变长参数在编译之后就自动转化成一个数组来完成参数传递；泛型的信息则在编译阶段就已经擦除掉了（但是在元数据中还保留着），相应的地方被编译器自动插入了类型转换代码。
+- 对 Java API 的代码增强。譬如 JDK 1.2 时代引入的 java.util.Collections 等一系列集合类，在 JDK 1.5 时代引入的 java.util.concurrent 并发包等。
+- 需要在字节码中进行支持的改动。如 JDK 1.7 里面新加入的语法特性：动态语言支持，就需要在虚拟机中新增一条 invokedynamic 字节码指令来实现相关的调用功能。不过字节码指令集一直处于相对比较稳定的状态，这种需要在字节码层面直接进行的改动是比较少见的。
+- 虚拟机内部的改进。如 JDK 1.5 中实现的 JSR-133 规范重新定义的 Java 内存模型（Java Memory Model，JMM）、CMS 收集器之类的改动，这类改动对于程序员编写代码基本是透明的，但会对程序运行时产生影响。
+ ​
+ ​	上述 4 类新功能中，Retrotranslator 只能模拟前两类，对于后面两类直接在虚拟机内部实现的改进，一般所有的逆向移植工具都是无能为力的，至少不能完整地或者再可接受的效率上完成全部模拟，否则虚拟机设计团队也没有必要舍近求远地改动处于 JDK 底层的虚拟机。在可以模拟的两类功能中，第二类模拟相对更容易实现一些，如 JDK 1.5 引入的 java.util.concurrent 包，实际是由多线程大师 Doug Lea 开发的一套并发包，在 JDK 1.5 出现之前就已经存在（那时候名字叫做 dl.util.concurrent，引入 JDK 时由作者和 JDK 开发团队共同做了一些改进），所以要在旧的 JDK 中支持这部分功能，以独立类库的方式便可实现。Retrotranslator 中附带了一个名叫 “backport-util-concurrent.jar” 的类库（由另一个名为 “Backport of JSR 166” 的项目所提供）来代替 JDK 1.5 的并发包。
+
+ ​	至于 JDK 在编译阶段进行处理的那些改进，Retrotranslator 则是使用 ASM 框架直接对字节码进行处理。由于组成 Class 文件的字节码指令数量并没有改变，所以无论是 JDK 1.3、JDK 1.4 还是 JDK 1.5，能用字节码表达的语义范围应该是一直的。当然，肯定不可能简单地把 Class 的文件版本号从 49.0 改回 48.0 就能解决问题了，虽然字节码指令的数量没有变化，但是元数据信息和一些语法支持的内容还是要做相应的修改。以枚举为例，在 JDK 1.5 中增加了 enum 关键字，但是 Class 文件常量池的 CONSTANT_Class_info 类型常量并没有发生任何语义变化，仍然是代表一个类或接口的符号引用，没有加入枚举，也没有增加过 “CONSTANT_Enum_info” 之类的 “枚举符号引用” 常量。所以使用 enum 关键字定义常量，虽然从 Java 语法上看起来与使用 class 关键字定义类、使用 interface 关键字定义接口是同一层次的，但实际上这是由 Javac 编译器做出来的假象，从字节码的角度来看，枚举仅仅是一个继承于 java.lang.Enum、自动生成了 values() 和 valueOf() 方法的普通 Java 类而已。
+
+ ​	Retrotranslator 对枚举所做的主要处理就是把枚举类的父类从 “java.lang.Enum” 替换位它运行时类库中包含的 “net.sf.retrotranslator.runtime.java.lang.Enum_”，然后再在类和字段的访问标志中抹去 ACC_ENUM 标志位。当然，这只是处理的总体思路，具体的实现要比上面说的复杂得多。可以想象既然两个父类实现都不一样，values() 和 valueOf() 的方法自然需要重写，常量池需要引入大量新的来自父类的符号引用，这些都是实现细节。
 
 # 10 早期（编译期）优化
 

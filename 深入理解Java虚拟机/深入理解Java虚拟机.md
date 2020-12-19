@@ -2115,6 +2115,102 @@ public class InvokeDynamicTest {
 
 ### 9.2.2 OSGi：灵活的类加载器架构
 
+​	OSGi（Open Service Gateway Initiative） 是 OSGi 联盟（OSGi Alliance）制定的一个基于 Java 语言的动态模块化规范，这个规范最初由 Sun、IBM、爱立信等公司联合发起，目的是使用服务提供商通过住宅网关为各种家用智能设备提供各种服务，后来这个规范在 Java 的其他技术领域也有相当不错的发展，现在已经成为 Java 世界中 “事实上” 的模块化标准，并且已经有了 Equinox、Felix 等成熟的实现。OSGi 在 Java 程序员中最著名的应用案例就是 Eclipse IDE，另外还有许多大型的软件平台和中间件服务器都基于或声明将会基于 OSGi 规范来实现，如 IBM Jazz 平台、GlassFish 服务器、JBoss OSGi 等。
+
+​	OSGi 中的每个模块（称为 Bundle）与普通的 Java 类库区别并不太大，两者一般都以 JAR 格式进行封装，并且内部存储的都是 Java Package 和 Class。但是一个 Bundle 可以声明它所依赖的 Java Package（通过 Import-Package 描述），也可以声明它允许导出发布的 Java Package（通过 Export-Package 描述）。在 OSGi 里面，Bundle 之间的依赖关系从传统的上层模块依赖底层模块转变为平级模块之间的依赖（至少外观上如此），而且类库的可见性能得到非常精确的控制，一个模块里只有被 Export 过的 Package 才可能由外界访问，其他的 Package 和 Class 将会隐藏起来。除了更精确的模块划分和可见性控制外，引入 OSGi 的另外一个重要理由是，基于 OSGi 的程序很可能（只是很可能，并不是一定会）可以实现模块级的热插拔功能，当程序升级更新或调试除错时，可以只停用、重新安装然后启用程序的其中一部分，这对企业级程序开发来说是一个非常有诱惑力的特性。
+
+​	OSGi 之所以能有上述 “诱人” 的特点，要归功于它灵活的类加载器架构。OSGi 的 Bundle 类加载器之间只有规则，没有固定的委派关系。例如，某个 Bundle 声明了一个它依赖的 Package，如果有其他 Bundle 声明发布了这个 Package，那么所有对这个 Package 的类加载动作都会委派给发布它的 Bundle 类加载器去完成。不涉及某个具体的 Package 时，各个 Bundle 加载器都是平级关系，只有具体使用某个 Package 和 Class 的时候，才会根据 Package 导入导出定义来构造 Bundle 间的委派和依赖。
+
+​	另外，一个 Bundle 类加载器为其他 Bundle 提供服务时，会根据 Export-Package 列表严格控制访问范围。如果一个类存在于 Bundle 的类库中但是没有被 Export，那么这个 Bundle 的类加载器能找到这个类，但不会提供给其他 Bundle 使用，而且 OSGi 平台也不会把其他 Bundle 的类加载请求分配给这个 Bundle 来处理。
+
+​	我们可以举一个更具体一些的简单例子，假设存在 Bundle A、Bundle B、Bundle C 三个模块，并且这三个 Bundle 定义的依赖关系如下。
+
+- Bundle A：声明发布了 packageA，依赖了 java.* 的包。
+- Bundle B：声明依赖了 packageA 和 packageC，同时也依赖了 java.* 的包。
+- Bundle C：声明发布了 packageC，依赖了 packageA。
+
+ ​	那么，这三个 Bundle 之间的类加载器及父类加载器之间的关系如图 9-2 所示。
+ 
+ ![OSGi的类加载架构](\resources\OSGi的类加载架构.jpg)
+ 
+ ​	由于没有牵扯到具体的 OSGi 实现，所以图 9-2 中的类加载器都没有指明具体的加载器实现，只是一个体现了加载器之间关系的概念模型，并且只是体现了 OSGi 中最简单的加载器委派关系。一般来说，在 OSGi 中，加载一个类可能发生的查找行为和委派关系会比图 9-2 中显示的复杂得多，类加载时可能进行的查找规则如下：
+
+- 以 java.* 开头的类，委派给父类加载器加载。
+- 否则，委派列表名单内的类，委派给父类加载器加载。
+- 否则，Import 列表中的类，委派给 Export 这个类的 Bundle 的类加载器加载。
+- 否则，查找当前 Bundle 的 Classpath，使用自己的类加载器加载。
+- 否则，查找是否在自己的 Fragment Bundle 中，如果是，则委派给 Fragment Bundle 的类加载器加载。
+- 否则，查找 Dynamic Import 列表的 Bundle，委派给对应 Bundle 的类加载器加载。
+- 否则，类查找失败。
+
+ ​	从图 9-2 中还可以看出，在 OSGi 里面，加载器之间的关系不再是双亲委派模型的属性结构，而是已经进一步发展成了一种更为复杂的、运行时才能确定的网状结构。这种网状的类加载器架构在带来更好的灵活性的同时，也可能会产生许多新的隐患。曾经参与过将一个非 OSGi 的大型系统向 Equinox OSGi 平台迁移的项目，由于历史原因，代码模块之间的的依赖关系错综复杂，勉强分离出各个模块的 Bundle 后，发现在高并发环境下经常出现死锁。我们很容易就找到了死锁的原因：如果出现了 Bundle A 依赖于 Bundle B 的 Package B，而 Bundle B 又依赖了 Bundle A 的 Package A，这两个 Bundle 进行类加载时就很容易发生死锁。具体情况是当 Bundle A 加载 Package B 的类时，首先需要锁定当前类加载器的实例对象（java.lang.ClassLoader.loadClass() 是一个 synchronized 方法），然后把请求委派给 Bundle B 的加载器处理，但如果这时候 Bundle B 也正好想加载 Package A 的类，它也先锁定自己的加载器再去请求 Bundle A 的加载器处理，这样，两个加载器都在等待对方处理自己的请求，而对方处理完之前自己又一直处于同步锁定的状态，因此它们就互相死锁，永远无法完成加载请求了。Equinox 的 Bug List 中有关于这类问题的 Bug，也提供了一个以牺牲性能为代价的解决方案——用户可以启用 osgi.classloader.singleThreadLoads 参数来按单线程串行化的方式强制进行类加载器动作。在 JDK 1.7 中，为非树状继承关系下的类加载器架构进行了一次专门的升级，目的是从底层避免这类死锁出现的可能。
+
+ ​	总体来说，OSGi 描绘了一个很美好的模块化开发的目标，而且定义了实现这个目标所需要的各种服务，同时也有成熟框架对其提供实现支持。对于单个虚拟机下的应用，从开发初期就建立在 OSGi 是一个很不错的选择，这样便于约束依赖。但并非所有的应用都适合采用 OSGi 作为基础架构，OSGi 在提供强大功能的同时，也引入了额外的复杂度，带来了线程死锁和内存泄露的风险。
+
+### 9.2.3 字节码生成技术与动态代理的实现
+
+ ​	“字节码生成” 并不是什么高深的技术，在看到 “字节码生成” 这个标题时也不必去想诸如 Javassit、CGLib、ASM 之类的字节码类库，因为 JDK 里面的 javac 命令就是字节码生成技术的 “老祖宗”，并且 javac 也是一个由 Java 语言写成的程序，它的代码存放在 OpenJDK 的 langtools/src/share/classes/com/sun/tools/javac 目录中。要深入了解字节码生成，阅读 javac 的源码是个很好的途径，不过 javac 对于我们这个例子来说太过庞大了。在 Java 里面除了 javac 和字节码类库外，使用字节码生成的例子还有很多，如 Web 服务器中的 JSP 编译器，编译时植入的 AOP 框架，还有很常用的动态代理技术，甚至在使用反射的时候虚拟机都有可能会在运行时生成字节码来提高执行速度。我们选择其中相对简单的动态代理来看看字节码生成技术是如何影响程序运作的。
+
+ ​	相信许多 Java 开发人员都使用过动态代理，即使没有直接使用过 java.lang.reflect.Proxy 或实现过 java.lang.reflect.InvocationHandler 接口，应该也用过 Spring 来做过 Bean 的组织管理。如果使用过 Spring，那大多数情况都会用过动态代理，因为如果 Bean 是面向接口编程，那么在 Spring 内部都是通过动态代理的方式来对 Bean 进行增强的。动态代理中所谓的 “动态”，是针对使用 Java 代码实际编写了代理类的 “静态” 代理而言的，它的优势不在于省去了编写代理类哪一点工作量，而是实现了可以在原始类和接口还未知的时候，就确定代理类的代理行为，当代理类与原始类脱离直接联系后，就可以很灵活地重用于不同的应用场景之中。
+
+ ​	代码清单 9-1  演示了一个最简单的动态代理的用法，原始的逻辑是打印一句 “hello world”，代理类的逻辑是在原始类方法执行前打印一句 “welcome”。我们先看一下代码，然后再分析 JDK 是如何做到的。
+
+``` java
+    import java.lang.reflect.InvocationHandler;
+    import java.lang.reflect.Method;
+    import java.lang.reflect.Proxy;
+     
+    public class DynamicProxyTest {
+     
+    	interface IHello {
+    		void sayHello();
+    	}
+    	
+    	static class Hello implements IHello {
+    		@Override
+    		public void sayHello() {
+    			 System.out.println("hello world");
+    		}
+    	}
+    	
+    	static class DynamicProxy implements InvocationHandler {
+     
+    		Object originalObj;
+    		
+    		Object bind(Object originalObj) {
+    			this.originalObj = originalObj;
+    			return Proxy.newProxyInstance(originalObj.getClass().getClassLoader(), 
+    					originalObj.getClass().getInterfaces(), this);
+    		}
+    		
+    		@Override
+    		public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    			System.out.println("welcome");
+    			return method.invoke(originalObj, args);
+    		}
+    		
+    	}
+    	
+    	public static void main(String[] args) throws Exception {
+    		IHello hello = (IHello) new DynamicProxy().bind(new Hello());
+    		hello.sayHello();
+    	}
+    }
+```
+
+  运行结果如下：
+
+``` java
+    welcome
+    hello world
+```
+
+ ​	上述代码里，唯一的 “黑匣子” 就是 Proxy.newProxyInstance() 方法，除此之外再没有任何特殊之处。这个方法返回一个实现了 IHello 的接口，并且代理了 new Hello() 实例行为的对象。跟踪这个方法的源码，可以看到程序进行了验证、优化、缓存、同步、生成字节码、显式类加载等操作，前面的步骤并不是我们关注的重点，而最后它调用了  方法来完成生成字节码的动作，这个方法可以在运行时产生一个描述代理类的字节码 byte[] 数组。如果想看一看这个再运行时产生的代理类中写了什么，可以在main() 方法中加入下面这句：
+
+``` java
+    System.getProperties().put("sun.misc.ProxyGenerator.saveGeneratedFiles", "true");
+```
+
 # 10 早期（编译期）优化
 
 # 11 晚期（运行期）优化
